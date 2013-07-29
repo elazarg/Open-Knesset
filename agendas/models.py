@@ -78,6 +78,7 @@ class AgendaVote(models.Model):
 
     def get_score_header(self):
         return _('Position')
+    
     def get_importance_header(self):
         return _('Importance')
 
@@ -91,41 +92,27 @@ class AgendaVote(models.Model):
         agendaScore = float(self.score) * float(self.importance)
         objMonth = dateMonthTruncate(self.vote.time)
 
-        summaryObjects = SummaryAgenda.objects.filter(agenda=self.agenda,
-                                                        month=objMonth).all()
-
-        agendaSummary = None
-        if not filter(lambda summary : summary.summary_type == 'AG', summaryObjects):
-            agendaSummary = SummaryAgenda(month=objMonth,
-                                            agenda=self.agenda,
-                                            summary_type='AG',
-                                            score=agendaScore,
-                                            votes=1)
-
-        agendasByMk = dict(map(lambda summary : (summary.mk_id, summary),
-                                   filter(lambda summary : summary.summary_type == 'MK',
-                                          summaryObjects)))
+        summaryObjects = SummaryAgenda.objects.filter(agenda=self.agenda,  month=objMonth).all()
+        agendasByMk = [s.mk_id for s in summaryObjects if s.summary_type != 'AG']
         newObjects = []
-        if agendaSummary:
-            newObjects.append(agendaSummary)
+        if len(agendasByMk) == len(summaryObjects):
+            newObjects.append(SummaryAgenda(agenda=self.agenda, month=objMonth,  votes=1,
+                                            summary_type='AG',   score=agendaScore))
+
         voters = defaultdict(list)
         for voteaction in self.vote.voteaction_set.all():
-            mkSummary = agendasByMk.get(voteaction.member_id, None)
-            if not mkSummary:
-                mkSummary = SummaryAgenda(month=objMonth,
-                                            agenda=self.agenda,
-                                            summary_type='MK',
-                                            mk_id=voteaction.member_id,
-                                            votes=1,
-                                            score=agendaScore * (1 if voteaction.type == 'for' else -1))
-                newObjects.append(mkSummary)
-            else:
+            if voteaction.member_id in agendasByMk:
                 voters[voteaction.type].append(voteaction.member_id)
-
-        SummaryAgenda.objects.filter(mk_id__in=voters['for']).update(votes=F('votes') + 1, score=F('score') + agendaScore)
-        SummaryAgenda.objects.filter(mk_id__in=voters['against']).update(votes=F('votes') + 1, score=F('score') - agendaScore)
+            else:
+                newObjects.append(SummaryAgenda(agenda=self.agenda, month=objMonth,  votes=1,
+                                            summary_type='MK',   mk_id=voteaction.member_id,
+                                            score=agendaScore * (1 if voteaction.type == 'for' else -1)))
+        fvotes = F('votes') + 1
+        SummaryAgenda.objects.filter(mk_id__in=voters['for']).update(votes=fvotes, score=F('score') + agendaScore)
+        SummaryAgenda.objects.filter(mk_id__in=voters['against']).update(votes=fvotes, score=F('score') - agendaScore)
         if newObjects:
             SummaryAgenda.objects.bulk_create(newObjects)
+
 
     def save(self, *args, **kwargs):
         super(AgendaVote, self).save(*args, **kwargs)
@@ -194,7 +181,7 @@ class AgendaManager(models.Manager):
         # Returns interesting agendas for model instances such as: member, party
         agendas = list(self.get_relevant_for_user(user))
         for agenda in agendas:
-            agenda.score = agenda.__getattribute__('%s_score' % instance.__class__.__name__.lower())(instance)
+            agenda.score = agenda.__getattribute__('{}_score'.format(instance.__class__.__name__.lower()))(instance)
             agenda.significance = agenda.score * agenda.num_followers
         agendas.sort(key=attrgetter('significance'))
         agendas = get_top_bottom(agendas, top, bottom)
@@ -203,23 +190,22 @@ class AgendaManager(models.Manager):
         return agendas
 
     def get_relevant_for_mk(self, mk, agendaId):
-        agendas = AgendaVote.objects.filter(agenda__id=agendaId, vote__votes__id=mk).distinct()
-        return agendas
-
+        return AgendaVote.objects.filter(agenda__id=agendaId, vote__votes__id=mk).distinct()
+    
     def get_relevant_for_user(self, user):
-        if user is None or not user.is_authenticated():
-            agendas = Agenda.objects.filter(is_public=True)\
-                                    .order_by('-num_followers')\
-                                    .prefetch_related('agendavotes')
-        elif user.is_superuser:
-            agendas = Agenda.objects.all().order_by('-num_followers')\
-                                          .prefetch_related('agendavotes')
-        else:
-            agendas = Agenda.objects.filter(Q(is_public=True) | 
-                                            Q(editors=user))\
-                                    .order_by('-num_followers')\
-                                    .prefetch_related('agendavotes')\
-                                    .distinct()
+        def get_priv_type(user):
+            if user is None or not user.is_authenticated(): return 0
+            elif user.is_superuser:  return 1
+            else: return 2   
+        t = get_priv_type(user)
+        if   t == 0: agendas = Agenda.objects.filter(is_public=True)
+        elif t == 1: agendas = Agenda.objects.all()
+        elif t == 2: agendas = Agenda.objects.filter(Q(is_public=True) | Q(editors=user))
+        
+        agendas = agendas.order_by('-num_followers').prefetch_related('agendavotes')
+        
+        if t == 2:
+            return agendas.distinct()
         return agendas
 
     def get_possible_to_suggest(self, user, vote):
@@ -439,25 +425,25 @@ class Agenda(models.Model):
                 summariesForRanges.append(summariesForRange)
 
             # compute agenda measures, store results per MK
-            mk_results = dict(map(lambda mk_id:(mk_id, []), mk_ids))
+            mk_results = { mk_id:[] for mk_id in mk_ids }
             for summaries in summariesForRanges:
                 agenda_data = summaries['AG']
-                total_votes = sum(map(attrgetter('votes'), agenda_data))
-                total_score = sum(map(attrgetter('score'), agenda_data))
+                total_votes = sum(x.votes for x in agenda_data)
+                total_score = sum(x.score for x in agenda_data)
                 current_mks_data = indexby(summaries['MK'], attrgetter('id'))
                 # calculate results per mk
                 rangeMkResults = []
                 for mk_id in mk_results.keys():
-                    mk_data = current_mks_data[mk_id]
-                    if mk_data:
-                        mk_votes = sum(map(attrgetter('votes'), mk_data))
+                    if current_mks_data[mk_id]:
+                        mk_votes = sum(x.votes for x in agenda_data)
                         mk_volume = mk_votes / total_votes
-                        mk_score = sum(map(attrgetter('score'), mk_data)) / total_score
+                        mk_score = sum(x.score for x in agenda_data) / total_score
                         rangeMkResults.append((mk_id, mk_votes, mk_score, mk_volume))
                     else:
-                        rangeMkResults.append(tuple([mk_id] + [None] * 3))
+                        rangeMkResults.append( (mk_id, None, None, None) )
                 # sort results by score descending
-                for rank, (mk_id, mk_votes, mk_score, mk_volume) in enumerate(sorted(rangeMkResults, key=itemgetter(2, 0), reverse=True)):
+                rangeMkResults.sort(key=itemgetter(2, 0), reverse=True)
+                for rank, (mk_id, mk_votes, mk_score, mk_volume) in enumerate(rangeMkResults):
                     mk_range_data = dict(score=mk_score, rank=rank, volume=mk_volume, numvotes=mk_votes)
                     if fullRange:
                         mk_results[mk_id] = mk_range_data
@@ -497,30 +483,33 @@ class Agenda(models.Model):
     def get_all_party_values(self):
         return Agenda.objects.get_all_party_values()
 
+    def _get_suggested_generic(self, num, func):
+        return func(Vote.objects.filter(~Q(agendavotes__agenda=self))).order_by('-score')[:num]
+        
     def get_suggested_votes_by_agendas(self, num):
-        votes = Vote.objects.filter(~Q(agendavotes__agenda=self))
-        votes = votes.annotate(score=Sum('agendavotes__importance'))
-        return votes.order_by('-score')[:num]
+        def func(votes):
+            return votes.annotate(score=Sum('agendavotes__importance'))
+        return self._get_suggested_generic(num, func)
 
     def get_suggested_votes_by_agenda_tags(self, num):
         # TODO: This is untested, agendas currently don't have tags
-        votes = Vote.objects.filter(~Q(agendavotes__agenda=self))
-        tag_importance_subquery = """
-        SELECT sum(av.importance)
-        FROM agendas_agendavote av
-        JOIN tagging_taggeditem avti ON avti.object_id=av.id and avti.object_type_id=%s
-        JOIN tagging_taggeditem ati ON ati.object_id=agendas_agenda.id and ati.object_type_id=%s
-        WHERE avti.tag_id = ati.tag_id
-        """
-        agenda_type_id = ContentType.objects.get_for_model(self).id
-        votes = votes.extra(select=dict(score=tag_importance_subquery),
-                            select_params=[agenda_type_id] * 2)
-        return votes.order_by('-score')[:num]
+        def func(votes):
+            tag_importance_subquery = """
+            SELECT sum(av.importance)
+            FROM agendas_agendavote av
+            JOIN tagging_taggeditem avti ON avti.object_id=av.id and avti.object_type_id=%s
+            JOIN tagging_taggeditem ati ON ati.object_id=agendas_agenda.id and ati.object_type_id=%s
+            WHERE avti.tag_id = ati.tag_id
+            """
+            agenda_type_id = ContentType.objects.get_for_model(self).id
+            return votes.extra(select=dict(score=tag_importance_subquery),
+                                select_params=[agenda_type_id] * 2)
+        return self._get_suggested_generic(num, func)
 
     def get_suggested_votes_by_controversy(self, num):
-        votes = Vote.objects.filter(~Q(agendavotes__agenda=self))
-        votes = votes.extra(select=dict(score='controversy'))
-        return votes.order_by('-score')[:num]
+        def func(votes):
+            return votes.extra(select=dict(score='controversy'))
+        return self._get_suggested_generic(num, func)
 
 SUMMARY_TYPES = (
     ('AG', 'Agenda Votes'),
