@@ -1,4 +1,5 @@
 from __future__ import division
+
 from itertools import chain
 from operator import itemgetter, attrgetter
 from collections import defaultdict
@@ -14,7 +15,6 @@ from django.core.urlresolvers import reverse
 from django.conf import settings
 
 from django.contrib.auth.models import User
-from actstream.models import Follow
 from laws.models import VoteAction, Vote
 
 #FIX: Party is not needed here, but imported for the sake of some other module
@@ -530,7 +530,7 @@ class SummaryAgenda(models.Model):
         return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type, self.mk or 'n/a',
                                             self.score, self.votes)
 # TODO: make this non-wild
-from listeners import *
+#from listeners import *
 
 def dateMonthTruncate(dt):
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
