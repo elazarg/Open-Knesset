@@ -17,7 +17,7 @@ from django.forms import model_to_dict
 import voting
 
 DEFAULT_PAGE_LEN = 20
-class HandlerExtensions():
+class HandlerExtensions(object):
     ''' a collection of extensions to Piston's `BaseHandler` '''
     @staticmethod
     def url(a):
@@ -45,7 +45,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
               'place_of_residence_lon', 'residence_centrality',
               'residence_economy', 'current_role_descriptions', 'links')
 
-    allowed_methods = ('GET')
+    allowed_methods = ('GET',)
     model = Member
     qs = Member.current_knesset.all()
 
@@ -53,27 +53,27 @@ class MemberHandler(BaseHandler, HandlerExtensions):
         return self.model.current_knesset.all()
 
     @staticmethod
-    def gender (member):
+    def gender(member):
         return member.get_gender_display()
 
     @staticmethod
-    def party (member):
+    def party(member):
         return member.current_party.name
 
     @staticmethod
-    def votes_count (member):
+    def votes_count(member):
         return member.voting_statistics.votes_count()
 
     @staticmethod
-    def votes_per_month (member):
+    def votes_per_month(member):
         return round(member.voting_statistics.average_votes_per_month(),1)
 
     @staticmethod
-    def service_time (member):
+    def service_time(member):
         return member.service_time()
 
     @staticmethod
-    def discipline (member):
+    def discipline(member):
         x = member.voting_statistics.discipline()
         if x:
             return round(x,2)
@@ -106,7 +106,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
         return member.bills_stats_approved
 
     @staticmethod
-    def roles (member):
+    def roles(member):
         return member.get_role
 
     @staticmethod
@@ -114,26 +114,26 @@ class MemberHandler(BaseHandler, HandlerExtensions):
         return member.average_weekly_presence_hours
 
     @staticmethod
-    def average_weekly_presence_rank (member):
+    def average_weekly_presence_rank(member):
         ''' Calculate the distribution of presence and place the user on a 5 level scale '''
-        SCALE = 5
+        SCALE = 5.0
 
-        rel_location = cache.get('average_presence_location_%d' % member.id)
+        rel_location = cache.get('average_presence_location_{}'.format(member.id))
         if not rel_location:
 
             presence_list = [m.average_weekly_presence_hours for m in Member.objects.all()]
             presence_list.sort()
-            presence_groups = int(math.ceil(len(presence_list) / float(SCALE)))
+            presence_groups = int(math.ceil(len(presence_list) / SCALE))
 
             # Generate cache for all members
             for mk in Member.objects.all():
                 avg = mk.average_weekly_presence_hours
                 if avg:
-                    mk_location = 1 + (presence_list.index(avg) / presence_groups)
+                    mk_location = 1 + presence_list.index(avg) / presence_groups
                 else:
                     mk_location = 0
 
-                cache.set('average_presence_location_%d' % mk.id, mk_location, 60*60*24)
+                cache.set('average_presence_location_{}'.format(mk.id), mk_location, 60*60*24)
 
                 if mk.id == member.id:
                     rel_location = mk_location
@@ -141,7 +141,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
         return rel_location
 
     @staticmethod
-    def committees (member):
+    def committees(member):
         temp_list = member.committee_meetings.values("committee", "committee__name").annotate(Count("id")).order_by('-id__count')[:5]
         return [(item['committee__name'], reverse('committee-detail', args=[item['committee']])) for item in temp_list]
 
@@ -154,7 +154,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
         return [(item['title'], item['url']) for item in temp_list.values('title', 'url')]
 
     @staticmethod
-    def member (member):
+    def member(member):
         qs = MemberHandler.qs.filter(member=member)
         return map(lambda o: dict(url=o.party.get_absolute_url(),
                      name=o.party.name,
@@ -283,17 +283,13 @@ class BillHandler(BaseHandler, HandlerExtensions):
             if qtype not in ['positive', 'negative']:
                 qtype = None
 
+            v = voting.models.Vote.objects
             # create the ordered list of bills according to the request
             if qtype is None:
-                # get the sorted list of popular bills (those with many votes)
-                bill_ids = voting.models.Vote.objects.get_popular(Bill)
+                bill_ids = v.get_popular(Bill)
             else:
-                # get the list of bills with annotations of their score (avg vote) and totalvotes
-                # filter only positively/negatively rated bills
-                # sort the bills according to their popularity
-                bill_ids = voting.models.Vote.objects.get_top(Bill, min_tv=2) \
-                        .filter(**{'score__gt':0.5} if qtype == 'positive' else {'score__lt':-0.5}) \
-                        .order_by('-totalvotes')
+                filter_score = {'score__gt':0.5} if qtype == 'positive' else {'score__lt':-0.5}
+                bill_ids = v.get_top(Bill, min_tv=2).filter(**filter_score).order_by('-totalvotes')
             return [qs.get(pk=x['object_id']) for x in bill_ids[slice_range]]
 
     @staticmethod
@@ -336,21 +332,22 @@ class BillHandler(BaseHandler, HandlerExtensions):
 
     @staticmethod
     def bill_title(bill):
-        return u"%s, %s" % (bill.law.title, bill.title)
+        return u"{}, {}".format(bill.law.title, bill.title)
     
     @staticmethod
     def proposals(bill):
-        def get_ignore(proposal, field='', ex=None):
+        class Fake: DoesNotExist = Ellipsis
+        def get_ignore(proposal, field='', ex=Fake):
             if not proposal: 
                 try:
                     proposal = getattr(bill, field)
                     return {'id': proposal.id, 'source_url': proposal.source_url,
                          'date': proposal.date, 'explanation': proposal.get_explanation()}
-                except ex: #TODO: fix this. should except specific type
+                except ex.DoesNotExist:
                     return {}
             
-        gov_proposal = get_ignore('gov_proposal', ex=GovProposal.DoesNotExist)
-        knesset_proposal = get_ignore('knesset_proposal', ex=KnessetProposal.DoesNotExist)
+        gov_proposal = get_ignore('gov_proposal', ex=GovProposal)
+        knesset_proposal = get_ignore('knesset_proposal', ex=KnessetProposal)
 
         return {'gov_proposal': gov_proposal,
                 'knesset_proposal': knesset_proposal,
@@ -506,8 +503,7 @@ class EventHandler(BaseHandler, HandlerExtensions):
         r = super(EventHandler, self).read(request, **kwargs)
         if 'id' in kwargs:
             return r
-        else:
-            return r.filter(when__gte=datetime.datetime.now())
+        return r.filter(when__gte=datetime.datetime.now())
 
     @staticmethod
     def which(event):
