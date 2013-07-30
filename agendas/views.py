@@ -57,7 +57,7 @@ class AgendaListView(ListView):
 
             for agenda_id, party_votes in allAgendaPartyVotes.iteritems():
                 allAgendaPartyVotes[agenda_id] = [
-                    (pid, name) for pid, name in party_votes if pid in parties_lookup]
+                    (k[0], k[1]) for k in party_votes if k[0] in parties_lookup]
 
             cache.set('AllAgendaPartyVotes', allAgendaPartyVotes, 1800)
 
@@ -136,7 +136,7 @@ class AgendaDetailView(DetailView):
             context['mks_bottom'] = get_first(mks_values[-5:])
 
         allAgendaPartyVotes = agenda.get_all_party_values()
-        context['agenda_party_values'] = { k:v for k, v in allAgendaPartyVotes.setdefault(agenda.id, [])}
+        context['agenda_party_values'] = { k[0]:k[1] for k in allAgendaPartyVotes.setdefault(agenda.id, [])}
         context['agendaTopParties'] = get_first(sorted(allAgendaPartyVotes[agenda.id], key=itemgetter(1), reverse=True)[:20])
         
         agenda_votes_name = 'agenda_votes_{}'.format(agenda.id)
