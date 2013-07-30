@@ -108,7 +108,7 @@ class AgendaDetailView(DetailView):
         context = super(AgendaDetailView, self).get_context_data(*args, **kwargs)
         agenda = context['object']
         try:
-            context['title'] = "{}".format(agenda.name)
+            context['title'] = u"{}".format(agenda.name)
         except AttributeError:
             context['title'] = _('None')
 
@@ -394,6 +394,10 @@ def update_editors_agendas(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     object_type = request.POST.get('form-0-object_type', None)
+    if object_type not in object_redirect:
+        logger.warn('unknown object_type')
+        return HttpResponseRedirect(reverse('main'))
+    
     object_id = request.POST.get('form-0-obj_id', None)
     vl_formset = object_formset_classes[object_type](request.POST)
     if not vl_formset.is_valid():
@@ -410,13 +414,13 @@ def update_editors_agendas(request):
             try:
                 agenda = Agenda.objects.get(pk=a['agenda_id'])
                 if request.user not in agenda.editors.all():
-                    return HttpResponseForbidden()
+                    raise Agenda.DoesNotExist()
             except Agenda.DoesNotExist:
                 return HttpResponseForbidden()
             t = object_redirect[a['object_type']]
             agenda_class = t[2]
             object_id = a['obj_id']
-            d = {'{}__id'.format(t[4]):object_id, 'agenda__id':a['agenda_id']}
+            d = {'{}_id'.format(t[4]):object_id, 'agenda_id':a['agenda_id']}
             if a['DELETE']:
                 try:
                     agenda_class.objects.get(**d).delete()
@@ -434,14 +438,7 @@ def update_editors_agendas(request):
                     av.importance = a['importance']
                 av.save()
 
-    if object_type in object_redirect:
-        if object_id:  # return to object page
-            return HttpResponseRedirect(
-                    reverse(object_redirect[object_type][0],
-                            kwargs={'pk':object_id}))
-        else:  # return to list
-            return HttpResponseRedirect(reverse(object_redirect[object_type][1]))
-    else:
-        logger.warn('unknown object_type')
-        return HttpResponseRedirect(reverse('main'))
+    param, kwargs = (0, {'pk':object_id}) if object_id else (1, None)
+    return HttpResponseRedirect(reverse(object_redirect[object_type][param], kwargs=kwargs))
+
 
