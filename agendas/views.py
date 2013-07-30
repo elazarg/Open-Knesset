@@ -380,9 +380,9 @@ def agenda_add_view(request):
 
 
 # used for redirection after an object has been added to the agenda
-object_redirect = {'vote':('vote-detail', 'vote-list', AgendaVote),
-                   'bill':('bill-detail', 'bill-list', AgendaBill),
-                   'committeemeeting':('committee-meeting', 'committee-list', AgendaMeeting),
+object_redirect = {'vote':('vote-detail', 'vote-list', AgendaVote, False, 'vote'),
+                   'bill':('bill-detail', 'bill-list', AgendaBill, False,  'bill'),
+                   'committeemeeting':('committee-meeting', 'committee-list', AgendaMeeting, True, 'meeting'),
                   }
 object_formset_classes = {'vote':VoteLinkingFormSet,
                           'bill':VoteLinkingFormSet,
@@ -404,6 +404,7 @@ def update_editors_agendas(request):
         for a in vl_formset.cleaned_data:
             if not a:
                 logger.info("invalid form")
+                continue
             # Check that the user is an editor of the agenda
             # he's trying to edit
             try:
@@ -412,74 +413,26 @@ def update_editors_agendas(request):
                     return HttpResponseForbidden()
             except Agenda.DoesNotExist:
                 return HttpResponseForbidden()
-            def delete(agenda_class):
+            t = object_redirect[a['object_type']]
+            agenda_class = t[2]
+            object_id = a['obj_id']
+            d = {'{}__id'.format(t[4]):object_id, 'agenda__id':a['agenda_id']}
+            if a['DELETE']:
                 try:
-                    object_id = a['obj_id']
-                    av = agenda_class.objects.get(
-                           agenda__id=a['agenda_id'],
-                           vote__id=object_id)
-                    av.delete()
-                    return object_id
+                    agenda_class.objects.get(**d).delete()
                 except agenda_class.DoesNotExist:
                     pass
-            if a['DELETE']:
-                object_id = delete(object_redirect[a['object_type']][2])
-            elif a['object_type'] == 'vote':
-                if (a['weight'] is not '' and
-                    a['importance'] is not ''):
-                    try:
-                        object_id = a['obj_id']
-                        av = AgendaVote.objects.get(
-                               agenda__id=a['agenda_id'],
-                               vote__id=a['obj_id'])
-                        av.score = a['weight']
-                        av.importance = a['importance']
-                        av.reasoning = a['reasoning']
-                        av.save()
-                    except AgendaVote.DoesNotExist:
-                        av = AgendaVote(
-                               agenda_id=int(a['agenda_id']),
-                               vote_id=int(a['obj_id']),
-                               score=a['weight'],
-                               importance=a['importance'],
-                               reasoning=a['reasoning'])
-                        av.save()
-            elif a['object_type'] == 'bill':
-                if (a['weight'] is not '' and
-                    a['importance'] is not ''):
-                    try:
-                        object_id = a['obj_id']
-                        av = AgendaBill.objects.get(
-                               agenda__id=a['agenda_id'],
-                               bill__id=a['obj_id'])
-                        av.score = a['weight']
-                        av.importance = a['importance']
-                        av.reasoning = a['reasoning']
-                        av.save()
-                    except AgendaBill.DoesNotExist:
-                        av = AgendaBill(
-                               agenda_id=int(a['agenda_id']),
-                               bill_id=int(a['obj_id']),
-                               score=a['weight'],
-                               importance=a['importance'],
-                               reasoning=a['reasoning'])
-                        av.save()
-            elif a['object_type'] == 'committeemeeting':
+            elif a['weight'] != '' and  (t[3] or a['importance'] != ''):
+                #create:
                 try:
-                    object_id = a['obj_id']
-                    av = AgendaMeeting.objects.get(
-                           agenda__id=a['agenda_id'],
-                           meeting__id=a['obj_id'])
-                    av.score = a['weight']
-                    av.reasoning = a['reasoning']
-                    av.save()
-                except AgendaMeeting.DoesNotExist:
-                    av = AgendaMeeting(
-                           agenda_id=int(a['agenda_id']),
-                           meeting_id=int(a['obj_id']),
-                           score=a['weight'],
-                           reasoning=a['reasoning'])
-                    av.save()
+                    av = agenda_class.objects.get(**d)
+                except agenda_class.DoesNotExist:
+                    av = agenda_class(**{k:int(v) for k, v in d.items()})
+                av.score = a['weight']
+                av.reasoning = a['reasoning']
+                if not t[3]:
+                    av.importance = a['importance']
+                av.save()
 
     if object_type in object_redirect:
         if object_id:  # return to object page
