@@ -63,7 +63,9 @@ class AgendaVoteManager(models.Manager):
         mk_query = queries.BASE_MK_QUERY % db_functions
         cursor.execute(mk_query)
 
+from listeners import Listener, Follower
 
+@Listener(key_attr='vote', titlegetter=lambda x : x.vote.title)
 class AgendaVote(models.Model):
     agenda = models.ForeignKey('Agenda', related_name='agendavotes')
     vote = models.ForeignKey('laws.Vote', related_name='agendavotes')
@@ -118,6 +120,7 @@ class AgendaVote(models.Model):
         super(AgendaVote, self).save(*args, **kwargs)
         self.update_monthly_counters()
 
+@Listener(key_attr='meeting', titlegetter=lambda x : x.meeting.title())
 class AgendaMeeting(models.Model):
     agenda = models.ForeignKey('Agenda', related_name='agendameetings')
     meeting = models.ForeignKey('committees.CommitteeMeeting',
@@ -140,6 +143,7 @@ class AgendaMeeting(models.Model):
     def __unicode__(self):
         return u"{} {}".format(self.agenda, self.meeting)
 
+@Listener(key_attr='bill', titlegetter=lambda x : x.bill.full_title)
 class AgendaBill(models.Model):
     agenda = models.ForeignKey('Agenda', related_name='agendabills')
     bill = models.ForeignKey('laws.bill', related_name='agendabills')
@@ -275,6 +279,7 @@ class AgendaManager(models.Manager):
     def get_all_party_values(self):
         return queries.getAllAgendaPartyVotes()
 
+@Follower
 class Agenda(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(null=True, blank=True)
@@ -529,8 +534,8 @@ class SummaryAgenda(models.Model):
     def __unicode__(self):
         return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type, self.mk or 'n/a',
                                             self.score, self.votes)
-# TODO: make this non-wild
-from listeners import *
+
+
 
 def dateMonthTruncate(dt):
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
