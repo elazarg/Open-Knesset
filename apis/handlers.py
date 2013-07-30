@@ -367,10 +367,10 @@ class PartyHandler(BaseHandler):
         return party.members.values_list('id',flat=True)
 
 
-def read_helper(getter, ex, success_case, fail_case, kwargs):
+def read_helper(getter, success_case, fail_case, kwargs):
     try:
         return getter.get(pk=kwargs['id'])
-    except ex.DoesNotExist:
+    except ObjectDoesNotExist:
         return rc.NOT_FOUND
     except KeyError:
         pass
@@ -395,14 +395,9 @@ class TagHandler(BaseHandler):
             return Tag.objects.filter(id__in=tags_ids)
         
         def fail_case():
-            vote_tags = Tag.objects.usage_for_model(Vote)
-            bill_tags = Tag.objects.usage_for_model(Bill)
-            cm_tags = Tag.objects.usage_for_model(CommitteeMeeting)
-            all_tags = list(set(vote_tags).union(bill_tags).union(cm_tags))
-            all_tags.sort(key=attrgetter('name'))
-            return all_tags
-        
-        return read_helper(Tag.objects, Tag, success_case, fail_case, kwargs)
+            all_tags = [Tag.objects.usage_for_model(x) for x in (Vote, Bill, CommitteeMeeting)]
+            return sorted(set().union(*all_tags), key=attrgetter('name'))
+        return read_helper(Tag.objects, success_case, fail_case, kwargs)
     
     @staticmethod
     def number_of_items(tag):
@@ -428,7 +423,7 @@ class AgendaHandler(BaseHandler):
         def fail_case():
             return agendas
         
-        return read_helper(agendas, Agenda, success_case, fail_case, kwargs)
+        return read_helper(agendas, success_case, fail_case, kwargs)
 
     @staticmethod
     def number_of_items(agenda):
