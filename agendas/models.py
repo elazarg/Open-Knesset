@@ -530,7 +530,7 @@ class SummaryAgenda(models.Model):
         return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type, self.mk or 'n/a',
                                             self.score, self.votes)
 # TODO: make this non-wild
-#from listeners import *
+from listeners import *
 
 def dateMonthTruncate(dt):
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
