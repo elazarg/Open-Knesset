@@ -15,6 +15,7 @@ from tagging.models import Tag, TaggedItem
 from events.models import Event
 from django.forms import model_to_dict
 import voting
+from django.core.exceptions import ObjectDoesNotExist
 
 DEFAULT_PAGE_LEN = 20
 class HandlerExtensions(object):
@@ -336,23 +337,18 @@ class BillHandler(BaseHandler, HandlerExtensions):
     
     @staticmethod
     def proposals(bill):
-        class Fake: DoesNotExist = Ellipsis
-        def get_ignore(proposal, field='', ex=Fake):
+        def get_ignore(proposal=None, field=''):
             if not proposal: 
                 try:
                     proposal = getattr(bill, field)
-                    return {'id': proposal.id, 'source_url': proposal.source_url,
-                         'date': proposal.date, 'explanation': proposal.get_explanation()}
-                except ex.DoesNotExist:
+                except ObjectDoesNotExist:
                     return {}
+            return {'id': proposal.id, 'source_url': proposal.source_url,
+                 'date': proposal.date, 'explanation': proposal.get_explanation()}
             
-        gov_proposal = get_ignore('gov_proposal', ex=GovProposal)
-        knesset_proposal = get_ignore('knesset_proposal', ex=KnessetProposal)
-
-        return {'gov_proposal': gov_proposal,
-                'knesset_proposal': knesset_proposal,
-                'private_proposals': [get_ignore(prop) for prop in bill.proposals.all()]}
-
+        res = {f:get_ignore(field=f) for f in ('gov_proposal', 'knesset_proposal')}
+        res['private_proposals'] = [get_ignore(prop) for prop in bill.proposals.all()]
+        return res
 
 class PartyHandler(BaseHandler):
     fields = ('id', 'name', 'start_date', 'end_date', 'members',
