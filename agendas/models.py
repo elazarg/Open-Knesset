@@ -213,7 +213,9 @@ class AgendaManager(models.Manager):
         return agendas
 
     def get_possible_to_suggest(self, user, vote):
-        if user is not None and user.is_authenticated():
+        #FIX: magic return values.
+        #should be fixed in the calling code too.
+        if user.is_authenticated():
             return Agenda.objects.filter(is_public=True)\
                             .exclude(editors=user)\
                             .exclude(agendavotes__vote=vote)\
@@ -298,7 +300,7 @@ class Agenda(models.Model):
         unique_together = (("name", "public_owner_name"),)
 
     def __unicode__(self):
-        return u"%s %s %s" % (self.name, _('edited by'), self.public_owner_name)
+        return u"{} {} {}".format(self.name, _('edited by'), self.public_owner_name)
 
     @models.permalink
     def get_absolute_url(self):
@@ -532,8 +534,8 @@ class SummaryAgenda(models.Model):
     db_updated = models.DateTimeField(auto_now=True)
 
     def __unicode__(self):
-        return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type, self.mk or 'n/a',
-                                            self.score, self.votes)
+        return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type,
+                                            self.mk or 'n/a', self.score, self.votes)
 
 
 

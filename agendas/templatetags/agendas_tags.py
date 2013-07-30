@@ -1,14 +1,11 @@
 import json
 
 from django import template
-from django.conf import settings
-from links.models import Link
-from agendas.models import (Agenda, AgendaVote, AgendaMeeting,
-                            AgendaBill, Party,
-                            UserSuggestedVote)
-from agendas.forms import (VoteLinkingForm, VoteLinkingFormSet,
-                           MeetingLinkingFormSet)
-from django.core.cache import cache
+from agendas.models import Agenda, AgendaVote, AgendaMeeting, AgendaBill, UserSuggestedVote
+from agendas.forms import VoteLinkingFormSet, MeetingLinkingFormSet
+
+#from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
 
 register = template.Library()
 
@@ -17,85 +14,64 @@ def agendas_for(user, obj, object_type):
     ''' renders the relevent agenda for the object obj and a form for the
         agendas the given user can edit
     '''
-    editable = []
-    if user.is_authenticated():
-        for a in user.agendas.all():
-            r = {'agenda_name': a.name, 'agenda_id': a.id, 'obj_id': obj.id}
+    meaning = {'vote':              ('vote',    AgendaVote,     VoteLinkingFormSet),
+               'committeemeeting':  ('meeting', AgendaMeeting,  MeetingLinkingFormSet),
+               'bill':              ('bill',    AgendaBill,     VoteLinkingFormSet)
+                }
+    m = meaning[object_type]
+    d = { m[0]:obj }
+    authenticated = user.is_authenticated()
+    
+    def get_r(a):
+        r = {'agenda_name': a.name, 'agenda_id': a.id,
+             'obj_id': obj.id, 'object_type':object_type}
+        try:
+            av = getattr(a, 'agenda{}s'.format(m[0])).get(**d)
+            if not av:
+                raise ObjectDoesNotExist()
+        except ObjectDoesNotExist:
+            r['weight'] = None
+            r['reasoning'] = u''
+        else: 
+            r['weight'] = av.score
+            r['reasoning'] = av.reasoning
             try:
-                av = None
-                if object_type=='vote':
-                    av = a.agendavotes.get(vote=obj)
-                if object_type=='committeemeeting':
-                    av = a.agendameetings.get(meeting=obj)
-                if object_type=='bill':
-                    av = a.agendabills.get(bill=obj)
-                if not av:
-                    raise AgendaVote.DoesNotExist
-                r['weight'] = av.score
-                r['reasoning'] = av.reasoning
-                r['object_type'] = object_type
-                try:
-                    r['importance'] = av.importance
-                except AttributeError:
-                    pass
-            except (AgendaVote.DoesNotExist,
-                    AgendaMeeting.DoesNotExist,
-                    AgendaBill.DoesNotExist):
-                r['weight'] = None
-                r['reasoning'] = u''
-                r['object_type'] = object_type
-            editable.append(r)
-
-    av = None
-    suggest_agendas = None
+                r['importance'] = av.importance
+            except AttributeError:
+                pass
+        return r
+    
+    formset = m[2](initial = [get_r(a) for a in user.agendas.all()]) if authenticated else None
+    
     suggested_agendas = None
+    suggest_agendas = None
+    av = m[1].objects.filter(agenda__in=Agenda.objects.get_relevant_for_user(user), **d).distinct()
     if object_type=='vote':
-        av = AgendaVote.objects.filter(
-                agenda__in=Agenda.objects.get_relevant_for_user(user),
-                vote=obj).distinct()
-        suggest_agendas = Agenda.objects.get_possible_to_suggest(
-                user=user,
-                vote=obj)
-        if user.is_authenticated():
-            suggested_agendas = UserSuggestedVote.objects.filter(user=user,
-                                                                 vote=obj)
-    if object_type=='committeemeeting':
-        suggest_agendas = None
-        av = AgendaMeeting.objects.filter(
-                agenda__in=Agenda.objects.get_relevant_for_user(user),
-                meeting=obj).distinct()
-    if object_type=='bill':
-        suggest_agendas = None
-        av = AgendaBill.objects.filter(
-                agenda__in=Agenda.objects.get_relevant_for_user(user),
-                bill=obj).distinct()
-    suggest_agendas_login = suggest_agendas is False
-    formset = None
-    if editable:
-        if object_type=='vote' or object_type=='bill':
-            formset = VoteLinkingFormSet(initial = editable)
-        if object_type=='committeemeeting':
-            formset = MeetingLinkingFormSet(initial = editable)
+        suggest_agendas = Agenda.objects.get_possible_to_suggest(user=user, **d)
+        if authenticated:
+            suggested_agendas = UserSuggestedVote.objects.filter(user=user, **d)
+
     return {'formset': formset,
             'agendas': av,
             'object_type': object_type,
             'suggest_agendas': suggest_agendas,
             'suggested_agendas': suggested_agendas,
-            'suggest_agendas_login':suggest_agendas_login,
+            'suggest_agendas_login': suggest_agendas == False,
             'url': obj.get_absolute_url(),
            }
 
 @register.inclusion_tag('agendas/agenda_list_item.html')
-def agenda_list_item(agenda, watched_agendas=None, agenda_votes_num=None, agenda_party_values=None, parties_lookup=None, editors_lookup=None, editor_ids=None):
-
+def agenda_list_item(agenda, watched_agendas=None, agenda_votes_num=None, agenda_party_values=None,
+                                         parties_lookup=None, editors_lookup=None, editor_ids=None):
     #cached_context = cache.get('agenda_parties_%d' % agenda.id)
     #if not cached_context:
     #    selected_parties = agenda.selected_instances(Party, top=20,bottom=0)['top']
     #    cached_context = {'selected_parties': selected_parties }
     #    cache.set('agenda_parties_%d' % agenda.id, cached_context, 900)
     party_scores = [(parties_lookup.get(val[0]), val[1]) for val in agenda_party_values]
-    enumerated_party = [(idx+0.5, values[0]) for idx, values in enumerate(party_scores)]
-    enumerated_score = [(idx, values[1]) for idx, values in enumerate(party_scores)]
+    enum = list(enumerate(party_scores))
+    enumerated_party = [(idx+0.5, values[0]) for idx, values in enum]
+    enumerated_score = [(idx, values[1]) for idx, values in enum]
     return {'agenda': agenda,
             'watched_agendas': watched_agendas,
             'party_scores': json.dumps(enumerated_score, ensure_ascii=False),

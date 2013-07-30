@@ -368,12 +368,16 @@ class PartyHandler(BaseHandler):
 
 
 def read_helper(getter, success_case, fail_case, kwargs):
+    # Handle API calls of type /agenda/[agenda_id]
     try:
         return getter.get(pk=kwargs['id'])
     except ObjectDoesNotExist:
         return rc.NOT_FOUND
     except KeyError:
         pass
+    
+    # Handle API calls of type /agenda/[app_label]/[vote_id]
+    # Used to return the agendas ascribed to a specific vote
     try:
         object_id = kwargs['object_id']
         ctype = ContentType.objects.get_by_natural_key(kwargs['app_label'], kwargs['object_type'])
