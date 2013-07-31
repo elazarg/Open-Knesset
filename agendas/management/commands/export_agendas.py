@@ -2,8 +2,7 @@ import os, csv
 from django.core.management.base import NoArgsCommand
 from django.conf import settings
 
-from mks.models import Member,Party
-from laws.models import Vote,VoteAction
+from mks.models import Member
 from agendas.models import Agenda, AgendaVote
 
 class Command(NoArgsCommand):
@@ -40,10 +39,3 @@ class Command(NoArgsCommand):
                         row.append(0)
                 csv_writer.writerow(row)
             f.close()
-
-
-
-
-
-
-

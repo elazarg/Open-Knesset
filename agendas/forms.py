@@ -34,10 +34,10 @@ class EditAgendaForm(forms.Form):
     def __init__(self, agenda=None, *args, **kwargs):
         super(EditAgendaForm, self).__init__(*args, **kwargs)
         self.agenda = agenda
-        if self.agenda is not None:
-            self.initial = {'name': self.agenda.name,
-                            'public_owner_name': self.agenda.public_owner_name,
-                            'description': self.agenda.description,
+        if agenda is not None:
+            self.initial = {'name': agenda.name,
+                            'public_owner_name': agenda.public_owner_name,
+                            'description': agenda.description,
                             }
 
 class AddAgendaForm(ModelForm):
@@ -67,7 +67,7 @@ class MeetingLinkingForm(forms.Form):
 
     def clean_weight(self):
         data = self.cleaned_data['weight']
-        if data=="":
+        if not data:
             return 99
         return data
 
@@ -85,6 +85,5 @@ class VoteLinkingForm(MeetingLinkingForm):
                                         required=False,
                                         widget=forms.Select)
 
-VoteLinkingFormSet = formset_factory(VoteLinkingForm, extra=0, can_delete=True)
-MeetingLinkingFormSet = formset_factory(MeetingLinkingForm, extra=0,
-                                        can_delete=True)
+VoteLinkingFormSet =    formset_factory(VoteLinkingForm,    extra=0, can_delete=True)
+MeetingLinkingFormSet = formset_factory(MeetingLinkingForm, extra=0, can_delete=True)

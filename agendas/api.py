@@ -11,8 +11,6 @@ from models import Agenda, AgendaVote
 from apis.resources.base import BaseResource
 from mks.models import Member, Party
 
-from operator import itemgetter
-
 class UserResource(BaseResource):
     class Meta(BaseResource.Meta):
         queryset = User.objects.all()
@@ -62,12 +60,10 @@ class AgendaTodoResource(BaseResource):
         return self._dehydrate_votes(votes)
 
     def _dehydrate_votes(self, votes):
-        def dehydrate_vote(vote):
-            return dict(id=vote.id,
-                        url=vote.get_absolute_url(),
-                        title=vote.title,
-                        score=vote.score)
-        return [dehydrate_vote(v) for v in votes]
+        return [{'id':vote.id,
+                'url':vote.get_absolute_url(),
+                'title':vote.title,
+                'score':vote.score} for vote in votes]
 
 
 class AgendaResource(BaseResource):
@@ -88,27 +84,27 @@ class AgendaResource(BaseResource):
         list_fields = ['name', 'id', 'description', 'public_owner_name']
 
     def dehydrate_members(self, bundle):
-        rangesString = bundle.request.GET.get('ranges',None)
-        fullRange = rangesString is None
-        if not fullRange:
-            ranges = map(   lambda rangeString:[datetime.strptime(val,"%Y%m") if val else None for val in rangeString.split('-')],
-                            rangesString.split(','))
-            mks_values = dict(bundle.obj.get_mks_values(ranges))
-        else:
-            mks_values = dict(bundle.obj.get_mks_values())
+        rangesString = bundle.request.GET.get('ranges', None)
+        ranges = rangesString and [
+                    [datetime.strptime(val,"%Y%m") if val else None for val in rangeString.split('-')]
+                      for rangeString in  rangesString.split(',')]
+        mks_values = dict(bundle.obj.get_mks_values(ranges))
         members = []
         for mk in Member.objects.filter(pk__in=mks_values.keys(),
                                         current_party__isnull=False).select_related('current_party'):
             # TODO: this sucks, performance wise
             current_party = mk.current_party
             mk_data = mks_values[mk.id]
+            if not isinstance(mk_data, list):
+                mk_data = [mk_data]
+            s = list(zip(*[(x['score'], x['rank'], x['volume'], x['numvotes']) for x in mk_data]))
             members.append(dict(
                 id=mk.id,
                 name=mk.name,
-                score=map(itemgetter('score'),mk_data) if isinstance(mk_data,list) else mk_data['score'],
-                rank=map(itemgetter('rank'),mk_data) if isinstance(mk_data,list) else mk_data['rank'],
-                volume=map(itemgetter('volume'),mk_data) if isinstance(mk_data,list) else mk_data['volume'],
-                numvotes=map(itemgetter('numvotes'),mk_data) if isinstance(mk_data,list) else mk_data['numvotes'],
+                score=s[0],
+                rank=s[1],
+                volume=s[2],
+                numvotes=s[3],
                 absolute_url=mk.get_absolute_url(),
                 party=current_party.name,
                 party_url=current_party.get_absolute_url(),
@@ -118,20 +114,14 @@ class AgendaResource(BaseResource):
         return members
 
     def dehydrate_parties(self, bundle):
-        party_values = dict(map(lambda party_data:(party_data[0],(party_data[1],party_data[2])),
-                            bundle.obj.get_party_values()))
+        party_values = {party_data[0]:{'score':party_data[1],'volume':party_data[2]}
+                         for party_data in  bundle.obj.get_party_values()}
         parties = []
         for party in Party.objects.all():
-            if party.pk in party_values:
-                parties.append(dict(name=party.name, 
-                                    score=party_values[party.pk][0], 
-                                    volume=party_values[party.pk][1],
-                                    absolute_url=party.get_absolute_url()))
-            else:
-                parties.append(dict(name=party.name,
-                                    score=0,
-                                    volume=0,
-                                    absolute_url=party.get_absolute_url()))
+            d = {'name':party.name, 'absolute_url':party.get_absolute_url()}
+            try: d.update(party_values[party.pk])
+            except KeyError: pass 
+            parties.append(d)
         return parties
 
     def dehydrate_votes(self, bundle):
@@ -149,15 +139,15 @@ class AgendaResource(BaseResource):
         ]
 
     def dehydrate_ranges(self, bundle):
-        rangesString = bundle.request.GET.get('ranges','-')
-        ranges = map(   lambda rangeString:[int(val) if val else None for val in rangeString.split('-')],
-                        rangesString.split(','))
+        rangesString = bundle.request.GET.get('ranges', '-')
+        ranges = [[int(val) if val else None for val in rangeString.split('-')]
+                   for rangeString in rangesString.split(',')]
         results = []
-        for start,end in ranges:
+        for start, end in ranges:
             rangeResult = {}
             if start:
-                rangeResult['from']=datetime(year=start/100,month=start%100,day=1)
+                rangeResult['from'] = datetime(year=start / 100, month=start % 100, day=1)
             if end:
-                rangeResult['to']=datetime(year=end/100,month=end%100,day=1)
+                rangeResult['to'] = datetime(year=end / 100, month=end % 100, day=1)
             results.append(rangeResult)
         return results

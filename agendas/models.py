@@ -222,29 +222,27 @@ class AgendaManager(models.Manager):
                             .distinct()
         return False
 
-    @staticmethod
-    def _iter_mks():
-        q = queries.agendas_mks_grade()
-        # outer join - add missing mks to agendas
-        # generates a set of all the current mk ids that have ever voted for any agenda
-        # its not perfect, but its better than creating another query to generate all known mkids
-        all_mks = {x[0] for x in chain.from_iterable(q.values())}
-        for agendaId, agendaVotes in q.items():
-            # the newdict will have 0's for each mkid, the update will change the value for known mks
-            agenda_mks = set()
-            res=[]
-            for mkid, score, volume, numvotes in agendaVotes:
-                agenda_mks.add(mkid)
-                res.append( (mkid,(score, volume, numvotes)) )
-            res.sort(key=lambda x:x[1][0], reverse=True)
-            scores = enumerate( chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
-            yield agendaId, [(mkid, dict(rank=rank, score=score, volume=volume, numvotes=numvotes))
-                                     for rank, (mkid, (score, volume, numvotes)) in  scores]
-            
     def get_mks_values(self):
         mks_values = cache.get('agendas_mks_values')
         if not mks_values:
-            mks_values = dict(self._iter_mks())
+            q = queries.agendas_mks_grade()
+            # outer join - add missing mks to agendas
+            # generates a set of all the current mk ids that have ever voted for any agenda
+            # its not perfect, but its better than creating another query to generate all known mkids
+            all_mks = {x[0] for x in chain.from_iterable(q.values())}
+            mks_values = {}
+            for agendaId, agendaVotes in q.items():
+                # the newdict will have 0's for each mkid, the update will change the value for known mks
+                agenda_mks = set()
+                res=[]
+                for mkid, score, volume, numvotes in agendaVotes:
+                    agenda_mks.add(mkid)
+                    res.append( (mkid,(score, volume, numvotes)) )
+                res.sort(key=lambda x:x[1][0], reverse=True)
+                
+                scores = enumerate( chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
+                mks_values[agendaId] = [(mkid, dict(rank=rank, score=score, volume=volume, numvotes=numvotes))
+                                         for rank, (mkid, (score, volume, numvotes)) in  scores]
             cache.set('agendas_mks_values', mks_values, 1800)
         return mks_values
 
