@@ -437,6 +437,9 @@ def update_editors_agendas(request):
                 if not t[3]:
                     av.importance = a['importance']
                 av.save()
+            else:
+                logger.info("invalid form: nothing to do")
+                continue
 
     param, kwargs = (0, {'pk':object_id}) if object_id else (1, None)
     return HttpResponseRedirect(reverse(object_redirect[object_type][param], kwargs=kwargs))

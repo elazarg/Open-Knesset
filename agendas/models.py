@@ -17,8 +17,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from laws.models import VoteAction, Vote
 
-#FIX: Party is not needed here, but imported for the sake of some other module
-from mks.models import Party, Member, Knesset
+from mks.models import Member, Knesset
 import queries
 
 AGENDAVOTE_SCORE_CHOICES = (
@@ -156,6 +155,7 @@ class AgendaBill(models.Model):
 
     def get_score_header(self):
         return _('Position')
+    
     def get_importance_header(self):
         return _('Importance')
 
@@ -222,25 +222,29 @@ class AgendaManager(models.Manager):
                             .distinct()
         return False
 
+    @staticmethod
+    def _iter_mks():
+        q = queries.agendas_mks_grade()
+        # outer join - add missing mks to agendas
+        # generates a set of all the current mk ids that have ever voted for any agenda
+        # its not perfect, but its better than creating another query to generate all known mkids
+        all_mks = {x[0] for x in chain.from_iterable(q.values())}
+        for agendaId, agendaVotes in q.items():
+            # the newdict will have 0's for each mkid, the update will change the value for known mks
+            agenda_mks = set()
+            res=[]
+            for mkid, score, volume, numvotes in agendaVotes:
+                agenda_mks.add(mkid)
+                res.append( (mkid,(score, volume, numvotes)) )
+            res.sort(key=lambda x:x[1][0], reverse=True)
+            scores = enumerate( chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
+            yield agendaId, [(mkid, dict(rank=rank, score=score, volume=volume, numvotes=numvotes))
+                                     for rank, (mkid, (score, volume, numvotes)) in  scores]
+            
     def get_mks_values(self):
         mks_values = cache.get('agendas_mks_values')
         if not mks_values:
-            q = queries.agendas_mks_grade()
-            # outer join - add missing mks to agendas
-            newAgendaMkVotes = {}
-            # generates a set of all the current mk ids that have ever voted for any agenda
-            # its not perfect, but its better than creating another query to generate all known mkids
-            allMkIds = set(map(itemgetter(0), chain.from_iterable(q.values())))
-            for agendaId, agendaVotes in q.items():
-                # the newdict will have 0's for each mkid, the update will change the value for known mks
-                newDict = {}.fromkeys(allMkIds, (0, 0, 0))
-                newDict.update(dict(map(lambda (mkid, score, volume, numvotes):(mkid, (score, volume, numvotes)), agendaVotes)))
-                newAgendaMkVotes[agendaId] = newDict.items()
-            mks_values = {}
-            for agenda_id, scores in newAgendaMkVotes.items():
-                mks_values[agenda_id] = \
-                    map(lambda x: (x[1][0], dict(score=x[1][1][0], rank=x[0], volume=x[1][1][1], numvotes=x[1][1][2])),
-                        enumerate(sorted(scores, key=lambda x:x[1][0], reverse=True), 1))
+            mks_values = dict(self._iter_mks())
             cache.set('agendas_mks_values', mks_values, 1800)
         return mks_values
 
@@ -320,12 +324,12 @@ class Agenda(models.Model):
                 select={'weighted_score':'agendas_agendavote.score * agendas_agendavote.importance'}
             ).values_list('weighted_score', 'vote__voteaction__type'))
         
-        for_score = against_score = 0
+        total_score = 0
         for score, action_type in qs:
             if action_type == 'against':
-                against_score += score
+                total_score -= score
             else:
-                for_score += score
+                total_score += score
         
         # To save the queries, make sure to pass prefetch/select related
         # Removed the values call, so that we can utilize the prefetched stuf
@@ -333,7 +337,7 @@ class Agenda(models.Model):
         # AgendaResource.dehydrate        
         max_score = sum(abs(x.score * x.importance) for x in self.agendavotes.all())
         max_score *= len(members)
-        return max_score and ((for_score - against_score) * 100.0 / max_score)
+        return max_score and (total_score * 100.0 / max_score)
          
     def member_score(self, member):
         return self.calculate_score([member])
@@ -375,14 +379,15 @@ class Agenda(models.Model):
 
     def generateSummaryFilters(self, ranges):
         results = []
-        for r in ranges:
-            if not r[0] and not r[1]:
-                return None  # might as well not filter at all
+        for gte, lt in ranges:
             queryFields = {}
-            if r[0]:
-                queryFields['month__gte'] = r[0]
-            if r[1]:
-                queryFields['month__lt'] = r[1]
+            if gte:
+                queryFields['month__gte'] = gte
+            if lt:
+                queryFields['month__lt']  = lt
+            if not queryFields:
+                # might as well not filter at all
+                return None
             results.append(Q(**queryFields))
         return results
 

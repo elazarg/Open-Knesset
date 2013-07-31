@@ -1,13 +1,15 @@
-from django.db import connection, transaction
+from django.db import connection
 from itertools import groupby
 from operator import itemgetter
 
-def getAllAgendaPartyVotes():
+def _getcursor(query):
     cursor = connection.cursor()
-    cursor.execute(PARTY_QUERY)
-    results = dict(map(lambda (key,group):(key,map(lambda g:(g[1],float(g[2]),float(g[3])),list(group))),
-                       groupby(cursor.fetchall(),key=itemgetter(0))))
-    return results
+    cursor.execute(query)    
+    return groupby(cursor.fetchall(), key=itemgetter(0))
+
+def getAllAgendaPartyVotes():
+    return {key:[(partyid, float(score), float(volume)) for _, partyid, score, volume in group]
+                       for key, group in _getcursor(PARTY_QUERY)}
 
 PARTY_QUERY = """
 SELECT a.agendaid,
@@ -64,11 +66,9 @@ FROM   (SELECT agid                   agendaid,
 ORDER BY agendaid,score desc"""
 
 def agendas_mks_grade():
-    cursor = connection.cursor()
-    cursor.execute(MK_QUERY)
-    results = dict(map(lambda (key,group):(key,map(lambda g:(g[1],float(g[2]),float(g[3]),int(g[4])),list(group))),
-                       groupby(cursor.fetchall(),key=itemgetter(0))))
-    return results
+    return {key:[(memberid, float(score), float(volume), int(numvotes))
+                 for _, memberid, score, volume, numvotes in group]
+           for key, group in _getcursor(MK_QUERY)}
 
 MK_QUERY = """
 SELECT a.agendaid, 
@@ -125,11 +125,8 @@ ORDER  BY agendaid,
           score DESC""" 
 
 def getAgendaEditorIds():
-    cursor = connection.cursor()
-    cursor.execute("""SELECT agenda_id,user_id FROM agendas_agenda_editors ORDER BY agenda_id""")
-    results = dict(map(lambda (key,group):(key,map(itemgetter(1),list(group))),
-                       groupby(cursor.fetchall(),key=itemgetter(0))))
-    return results
+    cursor = _getcursor("""SELECT agenda_id,user_id FROM agendas_agenda_editors ORDER BY agenda_id""")
+    return {key: [user_id for _, user_id in group] for key, group in cursor}
 
 BASE_AGENDA_QUERY = """ 
 INSERT INTO agendas_summaryagenda (month,summary_type,agenda_id,score,votes,db_created,db_updated)

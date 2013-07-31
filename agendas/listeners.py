@@ -2,56 +2,51 @@
 import datetime
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.contrib.contenttypes.models import ContentType
-from planet.models import Feed, Post
 from actstream import action
 from actstream.models import Follow
 from knesset.utils import disable_for_loaddata
 
-def _do_send(instance, **kwargs):
-    kwargs['timestamp'] = datetime.datetime.now()
-    action.send(instance.agenda, **kwargs)
-    
-_fmt_created = u'agenda {atype} ascribed', u'agenda "{name}" ascribed to {atype} "{title}"'
-_fmt_updated = u'agenda {atype} relation updated', u'relation between agenda "{name}" and {atype} "{title}" was updated'
-_fmt_removed = u'agenda {atype} removed', u'agenda "{name}" removed from {atype} "{title}"'
-
-#FIX:
+#FIX: 
 #@params should be based on naming convensions. probably getattr(aclass, atype).title
-def Listener(key_attr, titlegetter):
-    @disable_for_loaddata
-    def record_ascription_action(sender, created, instance, **kwargs):
-        if created:  verb, fmt = _fmt_created
-        else:        verb, fmt = _fmt_updated
-        description = fmt.format(name=instance.agenda.name, title=titlegetter(instance), atype=key_attr)
-        _do_send(instance, verb=verb.format(atype=key_attr), target=instance, description=description)
-
-    @disable_for_loaddata
-    def record_removal_action(sender, instance, **kwargs):
-        verb, fmt = _fmt_removed
-        description = fmt.format(name=instance.agenda.name, title=titlegetter(instance), atype=key_attr)
-        _do_send(instance, verb=verb.format(atype=key_attr), target=getattr(instance, key_attr), description=description)
-    
-    def wrap(aclass):
-        aclass._record_ascription_action = record_ascription_action
-        aclass._record_removal_action = record_removal_action
+class Listener():
+    fmt_updated = u'agenda {atype} relation updated',   u'relation between agenda "{name}" and {atype} "{title}" was updated'
+    fmt_created = u'agenda {atype} ascribed',           u'agenda "{name}" ascribed to {atype} "{title}"'
+    fmt_removed = u'agenda {atype} removed',            u'agenda "{name}" removed from {atype} "{title}"'
+    def __init__(self, key_attr, titlegetter):
+        self.key_attr = key_attr
+        self.titlegetter = titlegetter
         
-        post_save.connect(record_ascription_action, sender=aclass)
-        pre_delete.connect(record_removal_action, sender=aclass)
-        return aclass
-    return wrap
+    def do_send(self, instance, verb, fmt, get=False):
+        action.send(instance.agenda, verb=verb.format(atype=self.key_attr),
+                    target=(getattr(instance, self.key_attr) if get else instance),
+                    timestamp=datetime.datetime.now(),
+                    description=fmt.format(name=instance.agenda.name, title=self.titlegetter(instance), atype=self.key_attr))
+        
+    @disable_for_loaddata
+    def record_ascription_action(self, sender, created, instance, **kwargs):
+        verb, fmt = Listener.fmt_created if created else Listener.fmt_updated
+        self.do_send(instance, verb, fmt)
 
+    @disable_for_loaddata
+    def record_removal_action(self, sender, instance, **kwargs):
+        verb, fmt = Listener.fmt_removed
+        self.do_send(instance, verb, fmt, True)
+        
+    def __call__(self, aclass):    
+        post_save.connect(self.record_ascription_action, sender=aclass)
+        pre_delete.connect(self.record_removal_action, sender=aclass)
+        return aclass
+
+    
 def Follower(agenda_class):
     @disable_for_loaddata
-    def update_num_followers(sender, instance, **kwargs):
+    def _update_num_followers(sender, instance, **kwargs):
         agenda = instance.actor
         if isinstance(agenda, agenda_class):
             agenda.num_followers = Follow.objects.filter(
-                content_type=ContentType.objects.get(
-                        app_label="agendas",
-                        model="agenda").id,
+                content_type=ContentType.objects.get(app_label="agendas", model="agenda").id,
                 object_id=agenda.id).count()
             agenda.save()
-
-    post_delete.connect(update_num_followers, sender=Follow)
-    post_save.connect(update_num_followers, sender=Follow)
+    post_delete.connect(_update_num_followers, sender=Follow)
+    post_save.connect(_update_num_followers, sender=Follow)
     return agenda_class

@@ -4,31 +4,32 @@ from django.forms.formsets import formset_factory
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 
-from models import (Agenda, AgendaVote, UserSuggestedVote,
-                    AGENDAVOTE_SCORE_CHOICES,
-                    IMPORTANCE_CHOICES)
+from models import Agenda, AGENDAVOTE_SCORE_CHOICES, IMPORTANCE_CHOICES
 
 class H4(forms.Widget):
     """ used to display header fields """
     input_type = None # Subclasses must define this.
 
     def render(self, name, value, attrs=None):
-        return mark_safe(u'<h4>%s</h4>' % value)
+        return mark_safe(u'<h4>{}</h4>'.format(value))
+
+def _get_field_form_param(label, **kwargs):
+    error_messages = {'required': _('Please enter an agenda name')}
+    for length, should in [('min_length','longer'), ('max_length', 'shorter')]:
+        num = kwargs.get(length)
+        if num:
+            error_messages[length] = _('{} must be {} than {} characters'.format(label, should, num))
+    kwargs['label'] = _(label)
+    return kwargs
+
+_name_field_form_params = _get_field_form_param(u'Agenda name', max_length=300)
+_description_field_form_params = _get_field_form_param(u'Agenda description', min_length=15, widget=forms.Textarea)
+_public_owner_name_field_form_param = _get_field_form_param(u'Public owner name', max_length=100)
 
 class EditAgendaForm(forms.Form):
-    name = forms.CharField(max_length=300,
-                           label=_(u'Agenda name'),
-                           error_messages={'required': _('Please enter an agenda name'),
-                                           'max_length': _('Agenda name must be shorter than 300 characters')})
-    public_owner_name = forms.CharField(max_length=100,
-                                        label=_(u'Public owner name'),
-                                        error_messages={'required': _('Please enter a public owner name'),
-                                                        'max_length': _('Public owner name must be shorter than 100 characters')})
-    description = forms.CharField(min_length=15,
-                                  label=_(u'Agenda description'),
-                                  error_messages={'required': _('Please enter a description for this agenda'),
-                                                  'min_length': _('Agenda description must be at least 15 characters long')},
-                                  widget=forms.Textarea)
+    name = forms.CharField(**_name_field_form_params)
+    public_owner_name = forms.CharField(**_public_owner_name_field_form_param)
+    description = forms.CharField(**_description_field_form_params)
 
     def __init__(self, agenda=None, *args, **kwargs):
         super(EditAgendaForm, self).__init__(*args, **kwargs)
@@ -41,19 +42,9 @@ class EditAgendaForm(forms.Form):
 
 class AddAgendaForm(ModelForm):
     # to have the same names and help texts as the edit form, we need to override the form fields definitions:
-    name = forms.CharField(max_length=300,
-                           label=_(u'Agenda name'),
-                           error_messages={'required': _('Please enter an agenda name'),
-                                           'max_length': _('Agenda name must be shorter than 300 characters')})
-    public_owner_name = forms.CharField(max_length=100,
-                                        label=_(u'Public owner name'),
-                                        error_messages={'required': _('Please enter a public owner name'),
-                                                        'max_length': _('Public owner name must be shorter than 100 characters')})
-    description = forms.CharField(min_length=15,
-                                  label=_(u'Agenda description'),
-                                  error_messages={'required': _('Please enter a description for this agenda'),
-                                                  'min_length': _('Agenda description must be at least 15 characters long')},
-                                  widget=forms.Textarea)
+    name = forms.CharField(**_name_field_form_params)
+    public_owner_name = forms.CharField(**_public_owner_name_field_form_param)
+    description = forms.CharField(**_description_field_form_params)
 
     class Meta:
         model = Agenda
