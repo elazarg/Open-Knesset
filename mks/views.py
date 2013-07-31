@@ -1,15 +1,16 @@
 import urllib
 from operator import attrgetter
+from itertools import chain
 
 from django.conf import settings
 from django.db.models import Sum, Q
 from django.utils.translation import ugettext as _
 from django.http import HttpResponse, HttpResponseRedirect, Http404
-from django.views.generic import ListView, TemplateView, RedirectView
+from django.views.generic import ListView, RedirectView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.core.cache import cache
 from django.core.urlresolvers import reverse
-from django.utils import simplejson as json, simplejson
+from django.utils import simplejson as json
 from django.utils.decorators import method_decorator
 from django.contrib.contenttypes.models import ContentType
 from django.shortcuts import get_object_or_404
@@ -18,7 +19,6 @@ from actstream import actor_stream
 from actstream.models import Follow
 from hashnav.detail import DetailView
 from models import Member, Party, Knesset
-from polyorg.models import CandidateList
 from utils import percentile
 from laws.models import MemberVotingStatistics, Bill, VoteAction
 from agendas.models import Agenda
@@ -414,181 +414,50 @@ class PartyListView(ListView):
             context['opposition'] = context['opposition'].annotate(extra=Sum('number_of_seats')).order_by('-extra')
             context['norm_factor'] = 1
             context['baseline'] = 0
-        if info=='votes-per-seat':
-            m = 0
-            for p in context['coalition']:
-                p.extra = p.voting_statistics.votes_per_seat()
-                if p.extra > m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = p.voting_statistics.votes_per_seat()
-                if p.extra > m:
-                    m = p.extra
-            context['norm_factor'] = m/20
-            context['baseline'] = 0
-
-        if info=='discipline':
-            m = 100
-            for p in context['coalition']:
-                p.extra = p.voting_statistics.discipline()
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = p.voting_statistics.discipline()
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = (100.0-m)/15
-            context['baseline'] = m - 2
-
-        if info=='coalition-discipline':
-            m = 100
-            for p in context['coalition']:
-                p.extra = p.voting_statistics.coalition_discipline()
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = p.voting_statistics.coalition_discipline()
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = (100.0-m)/15
-            context['baseline'] = m - 2
-
-        if info=='residence-centrality':
-            m = 10
-            for p in context['coalition']:
-                rc = [member.residence_centrality for member in p.members.all() if member.residence_centrality]
-                if rc:
-                    p.extra = round(float(sum(rc))/len(rc),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                rc = [member.residence_centrality for member in p.members.all() if member.residence_centrality]
-                if rc:
-                    p.extra = round(float(sum(rc))/len(rc),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = (10.0-m)/15
-            context['baseline'] = m-1
-
-        if info=='residence-economy':
-            m = 10
-            for p in context['coalition']:
-                rc = [member.residence_economy for member in p.members.all() if member.residence_economy]
-                if rc:
-                    p.extra = round(float(sum(rc))/len(rc),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                rc = [member.residence_economy for member in p.members.all() if member.residence_economy]
-                if rc:
-                    p.extra = round(float(sum(rc))/len(rc),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = (10.0-m)/15
-            context['baseline'] = m-1
-
-        if info=='bills-proposed':
+        
+        if info.startswith('bills'):
+            s2 = {'bills-pre':       [Q(stage='2')|Q(stage='3')|Q(stage='4')|Q(stage='5')|Q(stage='6')] , 
+                  'bills-first':     [Q(stage='4')|Q(stage='5')|Q(stage='6')] ,
+                  'bills-approved':  [Q(stage='6')] ,
+                  'bills-proposed':  [] }
+            qlist = s2[info]
             m = 9999
-            for p in context['coalition']:
-                p.extra = len(set(Bill.objects.filter(proposers__current_party=p).values_list('id',flat=True)))/p.number_of_seats
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = len(set(Bill.objects.filter(proposers__current_party=p).values_list('id',flat=True)))/p.number_of_seats
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
-        if info=='bills-pre':
-            m = 9999
-            for p in context['coalition']:
-                p.extra = round(float(len(set(Bill.objects.filter(Q(proposers__current_party=p),Q(stage='2')|Q(stage='3')|Q(stage='4')|Q(stage='5')|Q(stage='6')).values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = round(float(len(set(Bill.objects.filter(Q(proposers__current_party=p),Q(stage='2')|Q(stage='3')|Q(stage='4')|Q(stage='5')|Q(stage='6')).values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
-        if info=='bills-first':
-            m = 9999
-            for p in context['coalition']:
-                p.extra = round(float(len(set(Bill.objects.filter(Q(proposers__current_party=p),Q(stage='4')|Q(stage='5')|Q(stage='6')).values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = round(float(len(set(Bill.objects.filter(Q(proposers__current_party=p),Q(stage='4')|Q(stage='5')|Q(stage='6')).values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
-        if info=='bills-approved':
-            m = 9999
-            for p in context['coalition']:
-                p.extra = round(float(len(set(Bill.objects.filter(proposers__current_party=p,stage='6').values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                p.extra = round(float(len(set(Bill.objects.filter(proposers__current_party=p,stage='6').values_list('id',flat=True))))/p.number_of_seats,1)
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
-        if info=='presence':
-            m = 9999
-            for p in context['coalition']:
-                awp = [member.average_weekly_presence() for member in p.members.all() if member.average_weekly_presence()]
-                if awp:
-                    p.extra = round(float(sum(awp))/len(awp),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                awp = [member.average_weekly_presence() for member in p.members.all() if member.average_weekly_presence()]
-                if awp:
-                    p.extra = round(float(sum(awp))/len(awp),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
-        if info=='committees':
-            m = 9999
-            for p in context['coalition']:
-                cmpm = [member.committee_meetings_per_month() for member in p.members.all() if member.committee_meetings_per_month()]
-                if cmpm:
-                    p.extra = round(float(sum(cmpm))/len(cmpm),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            for p in context['opposition']:
-                cmpm = [member.committee_meetings_per_month() for member in p.members.all() if member.committee_meetings_per_month()]
-                if cmpm:
-                    p.extra = round(float(sum(cmpm))/len(cmpm),1)
-                else:
-                    p.extra = 0
-                if p.extra < m:
-                    m = p.extra
-            context['norm_factor'] = m/2
-            context['baseline'] = 0
-
+            for p in qs:
+                x = len(set(Bill.objects.filter(Q(proposers__current_party=p), *qlist).values_list('id',flat=True))) /p.number_of_seats
+                if qlist:
+                    x = round(float(x, 1))
+                p.extra = x
+                m = min(m, p.extra)
+            context['norm_factor'], context['baseline']= m/2, 0
+        else:
+            x1 = (0, lambda m : m/20, lambda m : 0, max, False)
+            x2 = (100, lambda m : (100.0-m)/15, lambda m : m-2, min, False)
+            x3 = (10, lambda m :   (10.0-m)/15, lambda m : m-1, min, lambda x : x)
+            x4 = (9999, lambda m :m/2, lambda m : 0, min, lambda x : x())
+            
+            def call(name, start, norm, baseline, choose, call = False):
+                m = start
+                for p in qs:
+                    if call:
+                        rc = [call(getattr(member, name)) for member in p.members.all() if call(getattr(member, name))]
+                        p.extra = len(rc) or round(float(sum(rc))/len(rc),1)
+                    else:
+                        p.extra = getattr(p.voting_statistics, name)()
+                    m = choose(m, p.extra)
+                return norm(m), baseline(m)
+            s1={
+            'votes-per-seat':       ('votes_per_seat', x1),
+            'discipline':           ('discipline', x2),
+            'coalition-discipline': ('coalition_discipline', x2),
+            'residence-centrality': ('residence_centrality', x3),
+            'residence-economy':    ('residence_economy', x3),
+            'presence':             ('average_weekly_presence', x4),
+            'committees':           ('committee_meetings_per_month', x4)
+            }
+            name, todo = s1.get(info, (None, None))
+            if todo:
+                context['norm_factor'], context['baseline'] = call(name, *todo) 
+        
         context['title'] = _('Parties by %s') % dict(self.pages)[info]
         # prepare data for graphs. We'll be doing loops instead of list
         # comprehensions, to prevent multiple runs on the dataset (ticks, etc)
@@ -596,16 +465,16 @@ class PartyListView(ListView):
         coalition_data = []
         opposition_data = []
 
-        label = '%s<br><a href="%s">%s</a>'
+        label = '{}<br><a href="{}">{}</a>'
         count = 0  # Make sure we have some value, otherwise things like tests may fail
 
         for count, party in enumerate(context['coalition'], 1):
             coalition_data.append((count, party.extra))
-            ticks.append((count + 0.5, label % (party.extra, party.get_absolute_url(), party.name)))
+            ticks.append((count + 0.5, label.format(party.extra, party.get_absolute_url(), party.name)))
 
         for opp_count, party in enumerate(context['opposition'], count + 1):
             opposition_data.append((opp_count, party.extra))
-            ticks.append((opp_count + 0.5, label % (party.extra, party.get_absolute_url(), party.name)))
+            ticks.append((opp_count + 0.5, label.format(party.extra, party.get_absolute_url(), party.name)))
 
         graph_data = {
             'data': [

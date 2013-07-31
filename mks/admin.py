@@ -1,7 +1,4 @@
-from django import forms
 from django.contrib import admin
-from django.forms.models import modelformset_factory
-from django.forms.models import inlineformset_factory
 from django.contrib.contenttypes import generic
 from django.db.models import Q
 
