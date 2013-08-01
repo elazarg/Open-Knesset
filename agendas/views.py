@@ -92,10 +92,9 @@ class AgendaDetailView(DetailView):
 
     def get(self, request, *arg, **kwargs):
         try:
-            response = super(AgendaDetailView, self).get(request, *arg, **kwargs)
+            return super(AgendaDetailView, self).get(request, *arg, **kwargs)
         except self.ForbiddenAgenda:
             return HttpResponseForbidden()
-        return response
 
     def get_object(self):
         obj = super(AgendaDetailView, self).get_object()
@@ -112,9 +111,9 @@ class AgendaDetailView(DetailView):
             context['title'] = u"{}".format(agenda.name)
         except AttributeError:
             context['title'] = _('None')
-
-        if self.request.user.is_authenticated():
-            p = self.request.user.get_profile()
+        user = self.request.user
+        if user.is_authenticated():
+            p = user.get_profile()
             watched = agenda in p.agendas
             watched_members = p.members
         else:
@@ -123,8 +122,11 @@ class AgendaDetailView(DetailView):
         context.update({'watched_object': watched})
         context['watched_members'] = watched_members
 
+        #TODO: This is wrong. It only gives raw mks.
+        #      Nothing relevant to this agenda
         mks_values = agenda.get_mks_values()
         context['agenda_mk_values'] = dict(mks_values)
+        
         #cmp_rank = lambda x, y: x[1]['rank'] - y[1]['rank']
         def get_first(iterable):
             return [x[0] for x in iterable]

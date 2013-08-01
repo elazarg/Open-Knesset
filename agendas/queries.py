@@ -92,10 +92,10 @@ PQ2 = '''SELECT    a.agenda_id,
 PARTY_QUERY = """
     SELECT a.agenda_id,
            m.id party_id,
-           v.totalvotevalue  * 100.0 / (a.scimp*m.number_of_seats) score,
+           v.totalvotevalue  * 100.0 / (a.totalscore*m.number_of_seats) score,
            v.numvotes  * 100.0 / (a.numvotes*m.number_of_seats) volume
     FROM   (SELECT                         agenda_id,
-                  SUM(abs(score * importance)) scimp,
+                  SUM(abs(score * importance)) totalscore,
                   COUNT(agenda_id)            numvotes
             FROM  agendas_agendavote
             GROUP BY agenda_id) a  
@@ -107,6 +107,14 @@ def agendas_mks_grade():
     return {key:[(memberid, float(score), float(volume), int(numvotes))
                  for _, memberid, score, volume, numvotes in group]
            for key, group in _getcursor(MK_QUERY)}
+    
+REAL_VOTES = '''SELECT member_id, 
+                      CASE TYPE 
+                      WHEN 'for' THEN 1
+                      ELSE -1
+                      END   as value
+                 FROM laws_voteaction
+                 WHERE  TYPE IN ( 'for', 'against' ) '''
 
 MK_QUERY = """
 SELECT a.agendaid, 

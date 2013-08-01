@@ -145,8 +145,8 @@ I have a deadline''')
 
     def testAgendaDetail(self):
         # Access public agenda while not logged in
-        res = self.client.get('%s?all_mks' % reverse('agenda-detail',
-                                      kwargs={'pk': self.agenda_1.id}))
+        res = self.client.get('{}?all_mks'.format(
+                            reverse('agenda-detail', kwargs={'pk': self.agenda_1.id})))
         self.assertEqual(res.status_code, 200)
         self.assertTemplateUsed(res,
                                 'agendas/agenda_detail.html')
