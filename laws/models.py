@@ -1,5 +1,5 @@
 #encoding: utf-8
-import re, itertools, logging, random
+import re, logging, random
 from datetime import date, timedelta
 
 from django.db import models
@@ -8,7 +8,6 @@ from django import forms
 from django.utils.translation import ugettext_lazy as _
 from django.utils.safestring import mark_safe
 from django.utils.html import escape
-from django.db.models import Count, Q
 from django.core.cache import cache
 from django.conf import settings
 from django.contrib.auth.models import User
@@ -20,7 +19,7 @@ from tagging.utils import get_tag
 from actstream import Action
 from actstream.models import action
 
-from mks.models import Member, Party, Knesset
+from mks.models import Party, Knesset
 from tagvotes.models import TagVote
 from knesset.utils import slugify_name
 from laws.vote_choices import (TYPE_CHOICES, BILL_STAGE_CHOICES,
@@ -200,9 +199,9 @@ class VoteManager(models.Manager):
                 qs = qs.order_by('-against_party')
             if kwargs['order']=='votes':
                 qs = qs.order_by('-votes_count')
-
-        if kwargs.get('exclude_ascribed', False):  # exclude votes ascribed to
-                                                   # any bill.
+        
+        # exclude votes ascribed to any bill.
+        if kwargs.get('exclude_ascribed', False):  
             qs = qs.exclude(bills_pre_votes__isnull=False).exclude(
                 bills_first__isnull=False).exclude(bill_approved__isnull=False)
         return qs
@@ -335,10 +334,10 @@ class Vote(models.Model):
         ))
 
         for_party_ids = [va.member.party_at(d).id for va in self.for_votes()]
-        party_for_votes = [sum([x==id for x in for_party_ids]) for id in party_ids]
+        party_for_votes = [sum([x==pid for x in for_party_ids]) for pid in party_ids]
 
         against_party_ids = [va.member.party_at(d).id for va in self.against_votes()]
-        party_against_votes = [sum([x==id for x in against_party_ids]) for id in party_ids]
+        party_against_votes = [sum([x==pid for x in against_party_ids]) for pid in party_ids]
 
         party_stands_for = [float(fv)>0.66*(fv+av) for (fv,av) in zip(party_for_votes, party_against_votes)]
         party_stands_against = [float(av)>0.66*(fv+av) for (fv,av) in zip(party_for_votes, party_against_votes)]
@@ -480,7 +479,7 @@ class BillManager(models.Manager):
 
     def filter_and_order(self, *args, **kwargs):
         stage = kwargs.get('stage', None)
-        member = kwargs.get('member', None)
+        #member = kwargs.get('member', None)
         booklet = kwargs.get('booklet', None)
         changed_after = kwargs.get('changed_after', None)
         changed_before = kwargs.get('changed_before', None)
@@ -542,17 +541,17 @@ class Bill(models.Model):
         verbose_name_plural = _('Bills')
 
     def __unicode__(self):
-        return u"%s %s (%s)" % (self.law, self.title, self.get_stage_display())
+        return u"{} {} ({})".format(self.law, self.title, self.get_stage_display())
 
     @models.permalink
     def get_absolute_url(self):
         return ('bill-detail', [str(self.id)])
 
-    def save(self,**kwargs):
+    def save(self, **kwargs):
         self.slug = slugify_name(self.title)
         self.popular_name_slug = slugify_name(self.popular_name)
         if self.law:
-            self.full_title = "%s %s" % (self.law.title, self.title)
+            self.full_title = u"{} {}".format(self.law.title, self.title)
         else:
             self.full_title = self.title
         super(Bill,self).save(**kwargs)
@@ -573,21 +572,21 @@ class Bill(models.Model):
         """Merges another_bill into self, and delete another_bill
         """
         if not(self.id):
-            logger.debug('trying to merge into a bill with id=None, title=%s', self.title)
+            logger.debug(u'trying to merge into a bill with id=None, title={}'.format(self.title))
             self.save()
         if not(another_bill.id):
-            logger.debug('trying to merge a bill with id=None, title=%s', another_bill.title)
+            logger.debug(u'trying to merge a bill with id=None, title={}'.format(another_bill.title))
             another_bill.save()
 
         if self==another_bill:
-            logger.debug('abort merging bill %d into itself' % self.id)
+            logger.debug(u'abort merging bill {} into itself'.format(self.id))
             return
-        logger.debug('merging bill %d into bill %d' % (another_bill.id, self.id))
+        logger.debug(u'merging bill {} into bill {}'.format(another_bill.id, self.id))
 
         other_kp = KnessetProposal.objects.filter(bill=another_bill)
         my_kp = KnessetProposal.objects.filter(bill=self)
         if(len(my_kp) and len(other_kp)):
-            logger.debug('abort merging bill %d into bill %d, because both have KPs' % (another_bill.id, self.id))
+            logger.debug(u'abort merging bill {} into bill {}, because both have KPs'.format(another_bill.id, self.id))
             return
 
         for pv in another_bill.pre_votes.all():

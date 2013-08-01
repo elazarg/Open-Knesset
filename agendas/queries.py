@@ -4,14 +4,17 @@ from operator import itemgetter
 
 def _getcursor(query):
     cursor = connection.cursor()
-    cursor.execute(query)    
-    return groupby(cursor.fetchall(), key=itemgetter(0))
+    try:
+        cursor.execute(query)    
+        return groupby(cursor.fetchall(), key=itemgetter(0))
+    finally:
+        cursor.close()
 
 def getAllAgendaPartyVotes():
     return {key:[(partyid, float(score), float(volume)) for _, partyid, score, volume in group]
                        for key, group in _getcursor(PARTY_QUERY)}
 
-PARTY_QUERY = """
+PARTY_QUERY_OLD = """
 SELECT a.agendaid,
        a.partyid,
        round(coalesce(cast(coalesce(v.totalvotevalue,0.0)/a.totalscore*100.0 as numeric),0.0),2) score,
@@ -64,6 +67,41 @@ FROM   (SELECT agid                   agendaid,
          ON a.agendaid = v.agenda_id 
             AND a.partyid = v.partyid 
 ORDER BY agendaid,score desc"""
+
+PQ21 = '''SELECT m.current_party_id party_id, 
+                  v.vote_id          vote_id, 
+                  CASE v.TYPE 
+                  WHEN 'for' THEN COUNT(*)
+                  ELSE -COUNT(*)
+                  END           numvotes 
+           FROM   laws_voteaction v INNER JOIN mks_member m 
+                           ON     v.member_id = m.id 
+           WHERE  v.TYPE IN ( 'for', 'against' ) 
+           GROUP  BY m.current_party_id, v.vote_id, v.TYPE
+           '''
+           
+PQ2 = '''SELECT    a.agenda_id, 
+                    p.party_id, 
+                    SUM(p.numvotes * a.score * a.importance) totalvotevalue,
+                    SUM(ABS(p.numvotes)) numvotes
+           FROM   ({}) p INNER JOIN agendas_agendavote a 
+                               ON p.vote_id = a.vote_id
+           GROUP  BY a.agenda_id, p.party_id
+           '''.format(PQ21)
+
+PARTY_QUERY = """
+    SELECT a.agenda_id,
+           m.id party_id,
+           v.totalvotevalue  * 100.0 / (a.scimp*m.number_of_seats) score,
+           v.numvotes  * 100.0 / (a.numvotes*m.number_of_seats) volume
+    FROM   (SELECT                         agenda_id,
+                  SUM(abs(score * importance)) scimp,
+                  COUNT(agenda_id)            numvotes
+            FROM  agendas_agendavote
+            GROUP BY agenda_id) a  
+    INNER JOIN ({}) v       ON a.agenda_id = v.agenda_id
+    INNER JOIN mks_party m  ON m.id = v.party_id 
+    ORDER BY a.agenda_id, score DESC""".format(PQ2)
 
 def agendas_mks_grade():
     return {key:[(memberid, float(score), float(volume), int(numvotes))

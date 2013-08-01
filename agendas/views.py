@@ -53,6 +53,7 @@ class AgendaListView(ListView):
         if not allAgendaPartyVotes:
             # filtering for current knesset is done here
 
+            #TODO: this is embarassingly slow. ~1300ms !
             allAgendaPartyVotes = queries.getAllAgendaPartyVotes()
 
             for agenda_id, party_votes in allAgendaPartyVotes.iteritems():
