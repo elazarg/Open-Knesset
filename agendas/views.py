@@ -138,7 +138,7 @@ class AgendaDetailView(DetailView):
             context['mks_top'] = get_first(mks_values[:5])
             context['mks_bottom'] = get_first(mks_values[-5:])
 
-        allAgendaPartyVotes = agenda.get_all_party_values()
+        allAgendaPartyVotes = Agenda.objects.get_all_party_values()
         context['agenda_party_values'] = { k[0]:k[1] for k in allAgendaPartyVotes.setdefault(agenda.id, [])}
         context['agendaTopParties'] = get_first(sorted(allAgendaPartyVotes[agenda.id], key=itemgetter(1), reverse=True)[:20])
         

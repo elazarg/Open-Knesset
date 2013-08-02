@@ -490,9 +490,6 @@ class Agenda(models.Model):
         party_grades = Agenda.objects.get_all_party_values()
         return party_grades.get(self.id, [])
 
-    def get_all_party_values(self):
-        return Agenda.objects.get_all_party_values()
-
     def _get_suggested_generic(self, num, func):
         return func(Vote.objects.filter(~Q(agendavotes__agenda=self))).order_by('-score')[:num]
         
