@@ -46,24 +46,20 @@ class AgendaTodoResource(BaseResource):
     votes_by_controversy = fields.ListField()
     votes_by_agendas = fields.ListField()
 
-    # TODO: Make this a parameter or setting or something
-    NUM_SUGGESTIONS = 10
-
     def dehydrate_votes_by_agendas(self, bundle):
-        votes = bundle.obj.get_suggested_votes_by_agendas(
-            AgendaTodoResource.NUM_SUGGESTIONS)
-        return self._dehydrate_votes(votes)
+        return self._dehydrate_votes(bundle.obj.get_suggested_votes_by_agendas)
 
     def dehydrate_votes_by_controversy(self, bundle):
-        votes = bundle.obj.get_suggested_votes_by_controversy(
-            AgendaTodoResource.NUM_SUGGESTIONS)
-        return self._dehydrate_votes(votes)
+        return self._dehydrate_votes(bundle.obj.get_suggested_votes_by_controversy)
 
-    def _dehydrate_votes(self, votes):
+    # TODO: Make this a parameter or setting or something
+    NUM_SUGGESTIONS = 10
+    def _dehydrate_votes(self, select):
         return [{'id':vote.id,
                 'url':vote.get_absolute_url(),
                 'title':vote.title,
-                'score':vote.score} for vote in votes]
+                'score':vote.score}
+                for vote in select(AgendaTodoResource.NUM_SUGGESTIONS)]
 
 
 class AgendaResource(BaseResource):
@@ -83,71 +79,76 @@ class AgendaResource(BaseResource):
         excludes = ['is_public']
         list_fields = ['name', 'id', 'description', 'public_owner_name']
 
+    def dehydrate_ranges(self, bundle):
+        results = []
+        for rangeString in bundle.request.GET.get('ranges', '-').split(','):
+            start, end = rangeString.split('-')
+            rangeResult = {}
+            if start:
+                rangeResult['from'] = _gettime(start)
+            if end:
+                rangeResult['to'] = _gettime(end)
+            results.append(rangeResult)
+        return results
+         
+    @staticmethod                                   
+    def _get_points(mk_data):
+        # TODO: this sucks, performance wise
+        if not isinstance(mk_data, list):
+            mk_data = [mk_data]
+        #zip(*matrix) is transpose(matrix)
+        score, rank, volume, numvotes = zip(*[(x['score'], x['rank'], x['volume'], x['numvotes']) for x in mk_data])
+        return {
+            'score': score,
+            'rank': rank,
+            'volume': volume,
+            'numvotes': numvotes,
+        }
+        
     def dehydrate_members(self, bundle):
         rangesString = bundle.request.GET.get('ranges', None)
         ranges = rangesString and [
                     [datetime.strptime(val,"%Y%m") if val else None for val in rangeString.split('-')]
                       for rangeString in  rangesString.split(',')]
         mks_values = dict(bundle.obj.get_mks_values(ranges))
-        members = []
-        for mk in Member.objects.filter(pk__in=mks_values.keys(),
-                                        current_party__isnull=False).select_related('current_party'):
-            # TODO: this sucks, performance wise
-            current_party = mk.current_party
-            mk_data = mks_values[mk.id]
-            if not isinstance(mk_data, list):
-                mk_data = [mk_data]
-            s = list(zip(*[(x['score'], x['rank'], x['volume'], x['numvotes']) for x in mk_data]))
-            members.append(dict(
-                id=mk.id,
-                name=mk.name,
-                score=s[0],
-                rank=s[1],
-                volume=s[2],
-                numvotes=s[3],
-                absolute_url=mk.get_absolute_url(),
-                party=current_party.name,
-                party_url=current_party.get_absolute_url(),
-                party_id=current_party.pk
-            ))
-
-        return members
+        mks_list = Member.objects.filter(pk__in=mks_values.keys(),
+                                            current_party__isnull=False).select_related('current_party')
+        
+        return [ dict(  id=mk.id,
+                        name=mk.name,
+                        absolute_url=mk.get_absolute_url(),
+                        party= mk.current_party.name,
+                        party_url= mk.current_party.get_absolute_url(),
+                        party_id= mk.current_party.pk,
+                        **self._get_points(mks_values[mk.id]))
+                for mk in mks_list]
 
     def dehydrate_parties(self, bundle):
         party_values = {party_data[0]:{'score':party_data[1],'volume':party_data[2]}
                          for party_data in  bundle.obj.get_party_values()}
         parties = []
         for party in Party.objects.all():
-            d = {'name':party.name, 'absolute_url':party.get_absolute_url()}
+            d = {'name':party.name,
+                 'absolute_url':party.get_absolute_url()}
             try: d.update(party_values[party.pk])
             except KeyError: pass 
             parties.append(d)
         return parties
 
     def dehydrate_votes(self, bundle):
-        return [
-            dict(title=v.vote.title, id=v.vote_id, importance=v.importance,
-                 score=v.score, reasoning=v.reasoning)
-            for v in bundle.obj.agendavotes.select_related()
-        ]
+        return [{'title':v.vote.title,
+                 'id':v.vote_id,
+                 'importance':v.importance,
+                 'score':v.score,
+                 'reasoning':v.reasoning}
+                for v in bundle.obj.agendavotes.select_related()]
 
     def dehydrate_editors(self, bundle):
-        return [
-            dict(absolute_url=e.get_absolute_url(), username=e.username,
-                 avatar=avatar_url(e, 48))
-            for e in bundle.obj.editors.all()
-        ]
+        return [ {'absolute_url':e.get_absolute_url(),
+                  'username':e.username,
+                  'avatar':avatar_url(e, 48)}
+                for e in bundle.obj.editors.all() ]
 
-    def dehydrate_ranges(self, bundle):
-        rangesString = bundle.request.GET.get('ranges', '-')
-        ranges = [[int(val) if val else None for val in rangeString.split('-')]
-                   for rangeString in rangesString.split(',')]
-        results = []
-        for start, end in ranges:
-            rangeResult = {}
-            if start:
-                rangeResult['from'] = datetime(year=start / 100, month=start % 100, day=1)
-            if end:
-                rangeResult['to'] = datetime(year=end / 100, month=end % 100, day=1)
-            results.append(rangeResult)
-        return results
+def _gettime(at):
+    year, month = divmod(int(at), 100)
+    return datetime(year=year, month=month, day=1)

@@ -472,8 +472,6 @@ class Agenda(models.Model):
         :param knesset_number: The knesset numer of the mks. ``None`` will
                                return current knesset (default: ``None``).
         """
-        mks_grade = Agenda.objects.get_mks_values()
-
         if knesset_number is None:
             knesset = Knesset.objects.current_knesset()
         else:
@@ -482,9 +480,7 @@ class Agenda(models.Model):
         mks_ids = Member.objects.filter(
             current_party__knesset=knesset).values_list('pk', flat=True)
 
-        grades = mks_grade.get(self.id, [])
-        current_grades = [x for x in grades if x[0] in mks_ids]
-        return current_grades
+        return [x for x in Agenda.objects.get_mks_values().get(self.id, []) if x[0] in mks_ids]
 
     def get_party_values(self):
         party_grades = Agenda.objects.get_all_party_values()
@@ -496,6 +492,11 @@ class Agenda(models.Model):
     def get_suggested_votes_by_agendas(self, num):
         def func(votes):
             return votes.annotate(score=Sum('agendavotes__importance'))
+        return self._get_suggested_generic(num, func)
+
+    def get_suggested_votes_by_controversy(self, num):
+        def func(votes):
+            return votes.extra(select={'score':'controversy'})
         return self._get_suggested_generic(num, func)
 
     def get_suggested_votes_by_agenda_tags(self, num):
@@ -511,11 +512,6 @@ class Agenda(models.Model):
             agenda_type_id = ContentType.objects.get_for_model(self).id
             return votes.extra(select=dict(score=tag_importance_subquery),
                                 select_params=[agenda_type_id] * 2)
-        return self._get_suggested_generic(num, func)
-
-    def get_suggested_votes_by_controversy(self, num):
-        def func(votes):
-            return votes.extra(select=dict(score='controversy'))
         return self._get_suggested_generic(num, func)
 
 SUMMARY_TYPES = (
