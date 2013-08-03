@@ -62,24 +62,45 @@ class AgendaVoteManager(models.Manager):
         mk_query = queries.BASE_MK_QUERY % db_functions
         cursor.execute(mk_query)
 
+class Scorable(models.Model):
+    score = models.FloatField(default=0.0, choices=AGENDAVOTE_SCORE_CHOICES)
+    reasoning = models.TextField(null=True)
+
+    def get_score_header(self):
+        return _('Position')
+             
+    class Meta:
+        abstract = True
+
+class Important(Scorable):
+    importance = models.FloatField(default=1.0, choices=IMPORTANCE_CHOICES)
+
+    def get_importance_header(self):
+        return _('Importance')
+
+    class Meta:
+        abstract = True
+   
 from listeners import Listener, Follower
 
-@Listener(key_attr='vote', titlegetter=lambda x : x.vote.title)
-class AgendaVote(models.Model):
+@Listener(titlegetter=lambda x : x.vote.title)
+class AgendaVote(Important):
     agenda = models.ForeignKey('Agenda', related_name='agendavotes')
     vote = models.ForeignKey('laws.Vote', related_name='agendavotes')
-    score = models.FloatField(default=0.0, choices=AGENDAVOTE_SCORE_CHOICES)
-    importance = models.FloatField(default=1.0, choices=IMPORTANCE_CHOICES)
-    reasoning = models.TextField(null=True, blank=True)
 
     objects = AgendaVoteManager()
 
     def detail_view_url(self):
         return reverse('agenda-vote-detail', args=[self.pk])
 
-    def get_score_header(self):
-        return _('Position')
-    
+    @property
+    def key(self):
+        return self.vote
+
+    @staticmethod
+    def keyname():
+        return 'vote'
+
     def get_importance_header(self):
         return _('Importance')
 
@@ -114,19 +135,24 @@ class AgendaVote(models.Model):
         if newObjects:
             SummaryAgenda.objects.bulk_create(newObjects)
 
-
     def save(self, *args, **kwargs):
         super(AgendaVote, self).save(*args, **kwargs)
         self.update_monthly_counters()
 
-@Listener(key_attr='meeting', titlegetter=lambda x : x.meeting.title())
-class AgendaMeeting(models.Model):
+@Listener(titlegetter=lambda x : x.meeting.title())
+class AgendaMeeting(Scorable):
     agenda = models.ForeignKey('Agenda', related_name='agendameetings')
     meeting = models.ForeignKey('committees.CommitteeMeeting',
                                 related_name='agendacommitteemeetings')
-    score = models.FloatField(default=0.0, choices=IMPORTANCE_CHOICES)
-    reasoning = models.TextField(null=True)
 
+    @property
+    def key(self):
+        return self.meeting
+
+    @staticmethod
+    def keyname():
+        return 'meeting'
+    
     def detail_view_url(self):
         return reverse('agenda-meeting-detail', args=[self.pk])
 
@@ -142,22 +168,21 @@ class AgendaMeeting(models.Model):
     def __unicode__(self):
         return u"{} {}".format(self.agenda, self.meeting)
 
-@Listener(key_attr='bill', titlegetter=lambda x : x.bill.full_title)
-class AgendaBill(models.Model):
+@Listener(titlegetter=lambda x : x.bill.full_title)
+class AgendaBill(Important):
     agenda = models.ForeignKey('Agenda', related_name='agendabills')
     bill = models.ForeignKey('laws.bill', related_name='agendabills')
-    score = models.FloatField(default=0.0, choices=AGENDAVOTE_SCORE_CHOICES)
-    importance = models.FloatField(default=1.0, choices=IMPORTANCE_CHOICES)
-    reasoning = models.TextField(null=True)
 
+    @property
+    def key(self):
+        return self.bill
+
+    @staticmethod
+    def keyname():
+        return 'bill'
+    
     def detail_view_url(self):
         return reverse('agenda-bill-detail', args=[self.pk])
-
-    def get_score_header(self):
-        return _('Position')
-    
-    def get_importance_header(self):
-        return _('Importance')
 
     class Meta:
         unique_together = ('agenda', 'bill')
@@ -286,10 +311,10 @@ class AgendaManager(models.Manager):
 @Follower
 class Agenda(models.Model):
     name = models.CharField(max_length=200)
+    public_owner_name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
     editors = models.ManyToManyField('auth.User', related_name='agendas')
     votes = models.ManyToManyField('laws.Vote', through=AgendaVote)
-    public_owner_name = models.CharField(max_length=100)
     is_public = models.BooleanField(default=False)
     num_followers = models.IntegerField(default=0)
     image = models.ImageField(blank=True, null=True, upload_to='agendas')
@@ -358,7 +383,7 @@ class Agenda(models.Model):
         member_votes = list()
         for member_vote in reversed(all_votes):
             for voteaction in voteactions:
-                if (voteaction.vote == member_vote.vote):
+                if voteaction.vote == member_vote.vote:
                     member_vote.voteaction = voteaction
                     member_votes.append(member_vote)
 
@@ -375,20 +400,6 @@ class Agenda(models.Model):
         instances['bottom'].sort(key=attrgetter('score'), reverse=True)
         return instances
 
-    def generateSummaryFilters(self, ranges):
-        results = []
-        for gte, lt in ranges:
-            queryFields = {}
-            if gte:
-                queryFields['month__gte'] = gte
-            if lt:
-                queryFields['month__lt']  = lt
-            if not queryFields:
-                # might as well not filter at all
-                return None
-            results.append(Q(**queryFields))
-        return results
-
     def get_mks_totals(self, member):
         "Get count for each vote type for a specific member on this agenda"
 
@@ -401,59 +412,65 @@ class Agenda(models.Model):
 
         return qs
 
-    def get_mks_values(self, ranges=None):
-        if ranges is None:
-            ranges = [[None, None]]
-        fullRange = ranges == [[None, None]]
+    def generate_summary_filters(self, ranges):
+        results = Q()
+        for gte, lt in ranges:
+            queryFields = {}
+            if gte:
+                queryFields['month__gte'] = gte
+            if lt:
+                queryFields['month__lt']  = lt
+            if not queryFields:
+                # might as well not filter at all
+                return Q()
+            results |= Q(**queryFields)
+        return results
+
+    def get_mks_values(self, ranges=((None, None),)):
+        fullRange = (None, None) in ranges
         mks_values = fullRange and cache.get('agenda_{}_mks_values'.format(self.id))
         if not mks_values:
-            # get list of mk ids
-            mk_ids = Member.objects.all().values_list('id', flat=True)
-
-            # generate summary query
-            filterList = self.generateSummaryFilters(ranges)
 
             # query summary
-            baseQuerySet = SummaryAgenda.objects.filter(agenda=self)
-            if filterList:
-                if len(filterList) > 1:
-                    filtersFolded = reduce(lambda x, y:x | y, filterList)
-                else:
-                    filtersFolded = filterList[0]
-                baseQuerySet.filter(filtersFolded)
+            filterList = self.generate_summary_filters(ranges)
+            baseQuerySet = SummaryAgenda.objects.filter(filterList, agenda=self)
             summaries = list(baseQuerySet)
 
             # group summaries for respective ranges
-            summariesForRanges = []
-            for r in ranges:
-                summariesForRange = defaultdict(list)
+            summaries_for_ranges = []
+            for gte, lt in ranges:
+                summaries_for_range = defaultdict(list)
                 for s in summaries:
-                    if (r[0] and s.month >= r[0]) or \
-                        (r[1] and s.month < r[1]) or \
-                        (not r[0] and not r[1]):
-                        summariesForRange[s.summary_type].append(s)
-                summariesForRanges.append(summariesForRange)
+                    if (gte, lt) == (None, None) or \
+                        ( (not gte) or s.month >= gte) and \
+                        ( (not lt) or s.month < lt ):
+                        summaries_for_range[s.summary_type].append(s)
+                summaries_for_ranges.append(summaries_for_range)
 
+            # get list of mk ids
+            mk_ids = Member.objects.all().values_list('id', flat=True)
             # compute agenda measures, store results per MK
             mk_results = { mk_id:[] for mk_id in mk_ids }
-            for summaries in summariesForRanges:
+            for summaries in summaries_for_ranges:
                 agenda_data = summaries['AG']
                 total_votes = sum(x.votes for x in agenda_data)
                 total_score = sum(x.score for x in agenda_data)
                 current_mks_data = indexby(summaries['MK'], attrgetter('id'))
+                
                 # calculate results per mk
-                rangeMkResults = []
+                range_mk_results = []
                 for mk_id in mk_results.keys():
-                    if current_mks_data[mk_id]:
-                        mk_votes = sum(x.votes for x in agenda_data)
+                    mk_data = current_mks_data[mk_id]
+                    if mk_data:
+                        mk_votes = sum(x.votes for x in mk_data)
                         mk_volume = mk_votes / total_votes
-                        mk_score = sum(x.score for x in agenda_data) / total_score
-                        rangeMkResults.append((mk_id, mk_votes, mk_score, mk_volume))
+                        mk_score = sum(x.score for x in mk_data) / total_score
+                        range_mk_results.append((mk_id, mk_votes, mk_score, mk_volume))
                     else:
-                        rangeMkResults.append( (mk_id, None, None, None) )
+                        range_mk_results.append( (mk_id, None, None, None) )
                 # sort results by score descending
-                rangeMkResults.sort(key=itemgetter(2, 0), reverse=True)
-                for rank, (mk_id, mk_votes, mk_score, mk_volume) in enumerate(rangeMkResults):
+                range_mk_results.sort(key=itemgetter(2, 0), reverse=True)
+                for rank, (mk_id, mk_votes, mk_score, mk_volume) in enumerate(range_mk_results):
                     mk_range_data = dict(score=mk_score, rank=rank, volume=mk_volume, numvotes=mk_votes)
                     if fullRange:
                         mk_results[mk_id] = mk_range_data
@@ -532,8 +549,6 @@ class SummaryAgenda(models.Model):
     def __unicode__(self):
         return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type,
                                             self.mk or 'n/a', self.score, self.votes)
-
-
 
 def dateMonthTruncate(dt):
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

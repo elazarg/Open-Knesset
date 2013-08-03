@@ -86,4 +86,5 @@ class VoteLinkingForm(MeetingLinkingForm):
                                         widget=forms.Select)
 
 VoteLinkingFormSet =    formset_factory(VoteLinkingForm,    extra=0, can_delete=True)
+BillLinkingFormSet =    VoteLinkingFormSet
 MeetingLinkingFormSet = formset_factory(MeetingLinkingForm, extra=0, can_delete=True)

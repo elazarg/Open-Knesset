@@ -19,8 +19,8 @@ from hashnav import DetailView, ListView
 from mks.models import Member, Party
 from apis.urls import vote_handler
 
-from forms import (EditAgendaForm, AddAgendaForm, VoteLinkingFormSet,
-                   MeetingLinkingFormSet)
+from forms import (EditAgendaForm, AddAgendaForm,
+                   VoteLinkingFormSet, BillLinkingFormSet, MeetingLinkingFormSet)
 from models import Agenda, AgendaVote, AgendaMeeting, AgendaBill
 
 import queries
@@ -360,7 +360,6 @@ mock_api = MockApiCaller()
 @login_required
 def agenda_add_view(request):
     #allowed_methods = ['GET', 'POST']
-    template_name = 'agendas/agenda_add.html'
 
     if not request.user.is_superuser:
         return HttpResponseRedirect('/agenda/')
@@ -379,30 +378,29 @@ def agenda_add_view(request):
         initial_data = {'public_owner_name': request.user.username}
         form = AddAgendaForm(initial=initial_data)  # An unbound form with initial data
 
+    template_name = 'agendas/agenda_add.html'
     return render_to_response(template_name, {'form': form}, context_instance=RequestContext(request))
 
-
-# used for redirection after an object has been added to the agenda
-object_redirect = {'vote':('vote-detail', 'vote-list', AgendaVote, False, 'vote'),
-                   'bill':('bill-detail', 'bill-list', AgendaBill, False,  'bill'),
-                   'committeemeeting':('committee-meeting', 'committee-list', AgendaMeeting, True, 'meeting'),
-                  }
-object_formset_classes = {'vote':VoteLinkingFormSet,
-                          'bill':VoteLinkingFormSet,
-                          'committeemeeting':MeetingLinkingFormSet,
-                         }
+# general adjuster. perhaps better suited at forms.py
+from collections import namedtuple
+Selector = namedtuple('Selector', ['list',       'type',       'LinkingFormSet', 'has_importance', 'detail'])
+adjuster = { 
+'vote':                  Selector('vote-list',   AgendaVote,     VoteLinkingFormSet, True, 'vote-detail'),
+'bill':                  Selector('bill-list',   AgendaBill,     BillLinkingFormSet, True, 'bill-detail'),
+'committeemeeting':      Selector('committee-list', AgendaMeeting,  MeetingLinkingFormSet, False, 'committee-meeting')
+}
 
 @login_required
 def update_editors_agendas(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     object_type = request.POST.get('form-0-object_type', None)
-    if object_type not in object_redirect:
+    if object_type not in adjuster:
         logger.warn('unknown object_type')
         return HttpResponseRedirect(reverse('main'))
     
     object_id = request.POST.get('form-0-obj_id', None)
-    vl_formset = object_formset_classes[object_type](request.POST)
+    vl_formset = adjuster[object_type].LinkingFormSet(request.POST)
     if not vl_formset.is_valid():
         # TODO: Error handling: what to do with illeal forms?
         logger.info("invalid formset")
@@ -420,16 +418,16 @@ def update_editors_agendas(request):
                     raise Agenda.DoesNotExist()
             except Agenda.DoesNotExist:
                 return HttpResponseForbidden()
-            t = object_redirect[a['object_type']]
-            agenda_class = t[2]
+            adjust = adjuster[a['object_type']]
+            agenda_class = adjust.type
             object_id = a['obj_id']
-            d = {'{}_id'.format(t[4]):object_id, 'agenda_id':a['agenda_id']}
+            d = {'{}_id'.format(agenda_class.keyname()):object_id, 'agenda_id':a['agenda_id']}
             if a['DELETE']:
                 try:
                     agenda_class.objects.get(**d).delete()
                 except agenda_class.DoesNotExist:
                     pass
-            elif a['weight'] != '' and  (t[3] or a['importance'] != ''):
+            elif a['weight'] and  ((not adjust.has_importance) or a['importance']):
                 #create:
                 try:
                     av = agenda_class.objects.get(**d)
@@ -437,14 +435,15 @@ def update_editors_agendas(request):
                     av = agenda_class(**{k:int(v) for k, v in d.items()})
                 av.score = a['weight']
                 av.reasoning = a['reasoning']
-                if not t[3]:
+                if adjust.has_importance:
                     av.importance = a['importance']
                 av.save()
             else:
                 logger.info("invalid form: nothing to do")
                 continue
 
-    param, kwargs = (0, {'pk':object_id}) if object_id else (1, None)
-    return HttpResponseRedirect(reverse(object_redirect[object_type][param], kwargs=kwargs))
-
-
+    if object_id:
+        param, kwargs = (adjuster[object_type].detail, {'pk':object_id})
+    else: 
+        param, kwargs = (adjuster[object_type].list, None)
+    return HttpResponseRedirect(reverse(param, kwargs=kwargs))

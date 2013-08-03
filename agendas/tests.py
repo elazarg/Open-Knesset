@@ -11,7 +11,7 @@ from django.conf import settings
 from models import Agenda, AgendaVote, AgendaBill, AgendaMeeting
 from laws.models import Vote, VoteAction, Bill
 from mks.models import Party, Member, Membership, Knesset
-from committees.models import Committee, CommitteeMeeting
+from committees.models import Committee
 just_id = lambda x: x.id
 
 class SimpleTest(TestCase):
@@ -333,8 +333,7 @@ I have a deadline''')
         self.assertEqual(len(res.context['related_votes']), 2)
 
     def testAgendaDetailOptCacheFail(self):
-        res = self.client.get(reverse('agenda-detail',
-                                      kwargs={'pk': self.agenda_1.id}))
+        self.client.get(reverse('agenda-detail', kwargs={'pk': self.agenda_1.id}))
 
         self.agenda_4 = Agenda.objects.create(name='agenda 4',
                                               description='a bloody good agenda 4',
