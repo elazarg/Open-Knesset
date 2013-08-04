@@ -7,7 +7,7 @@ from django.db.models import Count
 from piston.handler import BaseHandler
 from piston.utils import rc
 from mks.models import Member, Party
-from laws.models import Vote, Bill, KnessetProposal, GovProposal
+from laws.models import Vote, Bill
 from agendas.models import Agenda
 from committees.models import Committee, CommitteeMeeting
 from links.models import Link

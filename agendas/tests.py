@@ -355,8 +355,6 @@ I have a deadline''')
         self.assertIn('title', vote, "Got vote with no title in agenda-todo")
         self.assertIn('score', vote, "Got vote with no importance in agenda-todo")
 
-
-
     def test_suggest_votes_for_new_agenda(self):
         new_agenda = Agenda.objects.create(name='new agenda',
                                            description='a brand new agenda',
