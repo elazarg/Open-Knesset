@@ -70,6 +70,7 @@ class MemberListView(ListView):
                         x.extra = take(x).average_votes_per_month()
                     y.sort(key=lambda x: x.extra, reverse=True)
                     return y
+                return select
             return (get_select(lambda x : x.voting_statistics),
                      get_select(lambda x : vs[x.id]))
         if info.startswith('bills'):
@@ -89,7 +90,7 @@ class MemberListView(ListView):
                 y.sort(key=lambda x: x.extra or 0, reverse=True)
                 return y
             return select, select
-            
+        
     def get_context_data(self, **kwargs):
 
         info = self.kwargs['stat_type']
