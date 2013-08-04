@@ -17,7 +17,7 @@ from annotatetext.models import Annotation
 from events.models import Event
 from links.models import Link
 from plenum.create_protocol_parts import create_plenum_protocol_parts
-from mks.models import Knesset
+from mks.models import Knesset, Member
 
 COMMITTEE_PROTOCOL_PAGINATE_BY = 120
 
@@ -392,16 +392,15 @@ class Topic(models.Model):
     objects = TopicManager()
 
     def set_status(self, status, message=''):
-       self.status = status
-       self.log = '\n'.join((u'%s: %s' % (self.get_status_display(), datetime.now()),
+        self.status = status
+        self.log = '\n'.join((u'%s: %s' % (self.get_status_display(), datetime.now()),
                             u'\t%s' % message,
                             self.log,)
                            )
-       self.save()
+        self.save()
 
     def can_edit(self, user):
         return user.is_superuser or user==self.creator or \
                user in self.editors.all()
 
-
-from listeners import *
+import listeners

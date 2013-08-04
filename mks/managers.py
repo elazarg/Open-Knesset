@@ -5,7 +5,6 @@ from django.db import models
 
 class KnessetManager(models.Manager):
     """This is a manager for Knesset class"""
-    class AllHellBreaksLooseException(Exception): pass
     
     def __init__(self):
         super(KnessetManager, self).__init__()
