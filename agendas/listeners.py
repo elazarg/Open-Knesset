@@ -6,18 +6,17 @@ from actstream import action
 from actstream.models import Follow
 from knesset.utils import disable_for_loaddata
 
-#FIX: 
-#@params should be based on naming convensions. probably getattr(aclass, atype).title
 class Listener():
     fmt_updated = u'agenda {atype} relation updated',   u'relation between agenda "{name}" and {atype} "{title}" was updated'
     fmt_created = u'agenda {atype} ascribed',           u'agenda "{name}" ascribed to {atype} "{title}"'
     fmt_removed = u'agenda {atype} removed',            u'agenda "{name}" removed from {atype} "{title}"'
 
     def do_send(self, instance, verb, fmt, get=False):
+        title = instance.key.full_title if hasattr(instance.key, 'full_title') else instance.key.title
         action.send(instance.agenda, verb=verb.format(atype=self.keyname()),
                     target=(self.key if get else instance),
                     timestamp=datetime.datetime.now(),
-                    description=fmt.format(name=instance.agenda.name, title=instance.title, atype=self.keyname()))
+                    description=fmt.format(name=instance.agenda.name, title=title, atype=self.keyname()))
         
     @disable_for_loaddata
     def record_ascription_action(self, sender, created, instance, **kwargs):

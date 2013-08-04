@@ -4,6 +4,7 @@ from datetime import date, timedelta
 
 from django.db import models
 from django.contrib.contenttypes import generic
+from django.contrib.contenttypes.models import ContentType
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 from django.utils.safestring import mark_safe
@@ -34,115 +35,6 @@ VOTE_ACTION_TYPE_CHOICES = (
 )
 
 CONVERT_TO_DISCUSSION_HEADERS = ('להעביר את הנושא'.decode('utf8'), 'העברת הנושא'.decode('utf8'))
-
-class CandidateListVotingStatistics(models.Model):
-    candidates_list = models.OneToOneField('polyorg.CandidateList',related_name='voting_statistics')
-
-    def votes_against_party_count(self):
-        return VoteAction.objects.filter(member__id__in=self.candidates_list.member_ids, against_party=True).count()
-
-    def votes_count(self):
-        return VoteAction.objects.filter(member__id__in=self.candidates_list.member_ids).exclude(type='no-vote').count()
-
-    def votes_per_seat(self):
-        return round(float(self.votes_count()) / len(self.candidates_list.member_ids))
-
-    def discipline(self):
-        total_votes = self.votes_count()
-        if total_votes > 0:
-            votes_against_party = self.votes_against_party_count()
-            return round(100.0*(total_votes-votes_against_party)/total_votes,1)
-        else:
-            return _('N/A')
-
-class PartyVotingStatistics(models.Model):
-    party = models.OneToOneField('mks.Party',related_name='voting_statistics')
-
-    def votes_against_party_count(self):
-        return VoteAction.objects.filter(member__current_party=self.party, against_party=True).count()
-
-    def votes_count(self):
-        return VoteAction.objects.filter(member__current_party=self.party).exclude(type='no-vote').count()
-
-    def votes_per_seat(self):
-        return round(float(self.votes_count()) / self.party.number_of_seats,1)
-
-    def discipline(self):
-        total_votes = self.votes_count()
-        if total_votes > 0:
-            votes_against_party = self.votes_against_party_count()
-            return round(100.0*(total_votes-votes_against_party)/total_votes,1)
-        else:
-            return _('N/A')
-
-    def coalition_discipline(self): # if party is in opposition this actually returns opposition_discipline
-        total_votes = self.votes_count()
-        if total_votes > 0:
-            if self.party.is_coalition:
-                votes_against_coalition = VoteAction.objects.filter(member__current_party=self.party, against_coalition=True).count()
-            else:
-                votes_against_coalition = VoteAction.objects.filter(member__current_party=self.party, against_opposition=True).count()
-            return round(100.0*(total_votes-votes_against_coalition)/total_votes,1)
-        else:
-            return _('N/A')
-
-    def __unicode__(self):
-        return "%s" % self.party.name
-
-class MemberVotingStatistics(models.Model):
-    member = models.OneToOneField('mks.Member', related_name='voting_statistics')
-
-    def votes_against_party_count(self, from_date = None):
-        if from_date:
-            return VoteAction.objects.filter(member=self.member, against_party=True, vote__time__gt=from_date).count()
-        else:
-            return VoteAction.objects.filter(member=self.member, against_party=True).count()
-
-    def votes_count(self, from_date = None):
-        if from_date:
-            return VoteAction.objects.filter(member=self.member, vote__time__gt=from_date).exclude(type='no-vote').count()
-        else:
-            vc = cache.get('votes_count_%d' % self.member.id)
-            if not vc:
-                vc = VoteAction.objects.filter(member=self.member).exclude(type='no-vote').count()
-                cache.set('votes_count_%d' % self.member.id,
-                          vc,
-                          settings.LONG_CACHE_TIME)
-            return vc
-
-    def average_votes_per_month(self):
-        if hasattr(self, '_average_votes_per_month'):
-            return self._average_votes_per_month
-        st = self.member.service_time()
-        if st:
-                self._average_votes_per_month =  30.0*self.votes_count()/st
-        else:
-                self._average_votes_per_month = 0
-        return self._average_votes_per_month
-
-    def discipline(self, from_date = None):
-        total_votes = self.votes_count(from_date)
-        if total_votes <= 3: # not enough data
-            return None
-        votes_against_party = self.votes_against_party_count(from_date)
-        return round(100.0*(total_votes-votes_against_party)/total_votes,1)
-
-    def coalition_discipline(self, from_date = None): # if party is in opposition this actually returns opposition_discipline
-        total_votes = self.votes_count(from_date)
-        if total_votes <= 3: # not enough data
-            return None
-        if self.member.current_party.is_coalition:
-            v = VoteAction.objects.filter(member=self.member, against_coalition=True)
-        else:
-            v = VoteAction.objects.filter(member=self.member, against_opposition=True)
-        if from_date:
-            v = v.filter(vote__time__gt=from_date)
-        votes_against_coalition = v.count()
-        return round(100.0*(total_votes-votes_against_coalition)/total_votes,1)
-
-
-    def __unicode__(self):
-        return "%s" % self.member.name
 
 class VoteAction(models.Model):
     type   = models.CharField(max_length=10,choices=VOTE_ACTION_TYPE_CHOICES)
@@ -231,8 +123,6 @@ class Vote(models.Model):
     tagged_items = generic.GenericRelation(TaggedItem,
                                            object_id_field="object_id",
                                            content_type_field="content_type")
-
-
     objects = VoteManager()
 
     class Meta:
@@ -241,7 +131,7 @@ class Vote(models.Model):
         verbose_name_plural = _('Votes')
 
     def __unicode__(self):
-        return "%s (%s)" % (self.title, self.time_string)
+        return "{} ({})".format(self.title, self.time_string)
 
     @property
     def passed(self):
@@ -298,8 +188,7 @@ class Vote(models.Model):
         return ('vote-detail', [str(self.id)])
 
     def _get_tags(self):
-        tags = Tag.objects.get_for_object(self)
-        return tags
+        return Tag.objects.get_for_object(self)
 
     def _set_tags(self, tag_list):
         Tag.objects.update_tags(self, tag_list)
@@ -327,11 +216,8 @@ class Vote(models.Model):
     def update_vote_properties(self):
         party_ids = Party.objects.values_list('id', flat=True)
         d = self.time.date()
-        party_is_coalition = dict(zip(
-                    party_ids,
-                    [x.is_coalition_at(self.time.date())
-                        for x in Party.objects.all()]
-        ))
+        party_is_coalition = {x.id:x.is_coalition_at(d)
+                                for x in Party.objects.all()}
 
         for_party_ids = [va.member.party_at(d).id for va in self.for_votes()]
         party_for_votes = [sum([x==pid for x in for_party_ids]) for pid in party_ids]
@@ -568,13 +454,13 @@ class Bill(models.Model):
     tags = property(_get_tags, _set_tags)
 
 
-    def merge(self,another_bill):
+    def merge(self, another_bill):
         """Merges another_bill into self, and delete another_bill
         """
-        if not(self.id):
+        if not self.id:
             logger.debug(u'trying to merge into a bill with id=None, title={}'.format(self.title))
             self.save()
-        if not(another_bill.id):
+        if not another_bill.id:
             logger.debug(u'trying to merge a bill with id=None, title={}'.format(another_bill.title))
             another_bill.save()
 
@@ -583,9 +469,8 @@ class Bill(models.Model):
             return
         logger.debug(u'merging bill {} into bill {}'.format(another_bill.id, self.id))
 
-        other_kp = KnessetProposal.objects.filter(bill=another_bill)
-        my_kp = KnessetProposal.objects.filter(bill=self)
-        if(len(my_kp) and len(other_kp)):
+        other_kp, my_kp = (KnessetProposal.objects.filter(bill=x) for x in [another_bill, self])
+        if other_kp and my_kp:
             logger.debug(u'abort merging bill {} into bill {}, because both have KPs'.format(another_bill.id, self.id))
             return
 
@@ -593,53 +478,57 @@ class Bill(models.Model):
             self.pre_votes.add(pv)
         for cm in another_bill.first_committee_meetings.all():
             self.first_committee_meetings.add(cm)
-        if not(self.first_vote) and another_bill.first_vote:
+        if (not self.first_vote) and another_bill.first_vote:
             self.first_vote = another_bill.first_vote
         for cm in another_bill.second_committee_meetings.all():
             self.second_committee_meetings.add(cm)
-        if not(self.approval_vote) and another_bill.approval_vote:
+        if (not self.approval_vote) and another_bill.approval_vote:
             self.approval_vote = another_bill.approval_vote
         for m in another_bill.proposers.all():
             self.proposers.add(m)
         for pp in another_bill.proposals.all():
             pp.bill = self
             pp.save()
-        if len(other_kp):
+        if other_kp:
             other_kp[0].bill = self
             other_kp[0].save()
         another_bill.delete()
         self.update_stage()
 
+    @staticmethod
+    def startswith_ishur_lehaavir(st):
+        return st.startswith('אישור'.decode('utf8')) , st.startswith('להעביר את'.decode('utf8'))
+        
     def update_votes(self):
         used_votes = [] # ids of votes already assigned 'roles', so we won't match a vote in 2 places
         gp = GovProposal.objects.filter(bill=self)
         if gp:
-            gp = gp[0]
-            for this_v in gp.votes.all():
-                if (this_v.title.find('אישור'.decode('utf8')) == 0):
+            for this_v in gp[0].votes.all():
+                approval, first = self.startswith_ishur_lehaavir(this_v.title)
+                if approval:
                     self.approval_vote = this_v
                     used_votes.append(this_v.id)
-                if this_v.title.find('להעביר את'.decode('utf8')) == 0:
+                if first:
                     self.first_vote = this_v
 
         kp = KnessetProposal.objects.filter(bill=self)
-        if len(kp):
+        if kp:
             for this_v in kp[0].votes.all():
-                if (this_v.title.find('אישור'.decode('utf8')) == 0):
+                approval, first = self.startswith_ishur_lehaavir(this_v.title)
+                if approval:
                     self.approval_vote = this_v
                     used_votes.append(this_v.id)
-                if this_v.title.find('להעביר את'.decode('utf8')) == 0:
+                if first:
                     if this_v.time.date() > kp[0].date:
                         self.first_vote = this_v
                     else:
                         self.pre_votes.add(this_v)
                     used_votes.append(this_v.id)
-        pps = PrivateProposal.objects.filter(bill=self)
-        if len(pps):
-            for pp in pps:
-                for this_v in pp.votes.all():
-                    if this_v.id not in used_votes:
-                        self.pre_votes.add(this_v)
+                    
+        for pp in PrivateProposal.objects.filter(bill=self):
+            for this_v in pp.votes.all():
+                if this_v.id not in used_votes:
+                    self.pre_votes.add(this_v)
         self.update_stage()
 
 
@@ -748,20 +637,15 @@ class Bill(models.Model):
                 action.send(self, verb='was-pre-voted', target=v,
                             timestamp=v.time, description=v.passed)
 
-        if self.first_vote:
-            action.send(self, verb='was-first-voted', target=self.first_vote,
-                        timestamp=self.first_vote.time, description=self.first_vote.passed)
+        for verb, target in [('first', self.first_vote),
+                             ('approval', self.approval_vote)]:
+            if target:
+                action.send(self, verb='was-{}-voted'.format(verb), target=target,
+                        timestamp=target.time, description=target.passed)
 
-        if self.approval_vote:
-            action.send(self, verb='was-approval-voted', target=self.approval_vote,
-                        timestamp=self.approval_vote.time, description=self.approval_vote.passed)
-
-        for cm in self.first_committee_meetings.all():
-            action.send(self, verb='was-discussed-1', target=cm,
-                        timestamp=cm.date, description=cm.committee.name)
-
-        for cm in self.second_committee_meetings.all():
-            action.send(self, verb='was-discussed-2', target=cm,
+        for i, committee_meetings in enumerate([self.second_committee_meetings, self.first_committee_meetings], 1):
+            for cm in committee_meetings.all():
+                action.send(self, verb='was-discussed-{}'.format(i), target=cm,
                         timestamp=cm.date, description=cm.committee.name)
 
         for g in self.gov_decisions.all():
@@ -857,4 +741,113 @@ def get_thousands_string(f):
     else:
         return "%d000 NIS" % f
 
-from listeners import *
+class CandidateListVotingStatistics(models.Model):
+    candidates_list = models.OneToOneField('polyorg.CandidateList', related_name='voting_statistics')
+
+    def votes_against_party_count(self):
+        return VoteAction.objects.filter(member__id__in=self.candidates_list.member_ids, against_party=True).count()
+
+    def votes_count(self):
+        return VoteAction.objects.filter(member__id__in=self.candidates_list.member_ids).exclude(type='no-vote').count()
+
+    def votes_per_seat(self):
+        return round(float(self.votes_count()) / len(self.candidates_list.member_ids))
+
+    def discipline(self):
+        total_votes = self.votes_count()
+        if total_votes > 0:
+            votes_against_party = self.votes_against_party_count()
+            return round(100.0*(total_votes-votes_against_party)/total_votes,1)
+        else:
+            return _('N/A')
+
+class PartyVotingStatistics(models.Model):
+    party = models.OneToOneField('mks.Party',related_name='voting_statistics')
+    
+    def votes_against_party_count(self):
+        return VoteAction.objects.filter(member__current_party=self.party, against_party=True).count()
+
+    def votes_count(self):
+        return VoteAction.objects.filter(member__current_party=self.party).exclude(type='no-vote').count()
+
+    def votes_per_seat(self):
+        return round(float(self.votes_count()) / self.party.number_of_seats,1)
+        
+    def discipline(self):
+        total_votes = self.votes_count()
+        if total_votes > 0:
+            votes_against_party = self.votes_against_party_count()
+            return round(100.0*(total_votes-votes_against_party)/total_votes,1)
+        else:
+            return _('N/A')
+
+    def coalition_discipline(self): # if party is in opposition this actually returns opposition_discipline
+        total_votes = self.votes_count()
+        if total_votes > 0:
+            if self.party.is_coalition:
+                votes_against = VoteAction.objects.filter(member__current_party=self.party, against_coalition=True).count()
+            else: 
+                votes_against = VoteAction.objects.filter(member__current_party=self.party, against_opposition=True).count()
+            return round(100.0*(total_votes-votes_against)/total_votes, 1)
+        else:
+            return _('N/A')
+
+    def __unicode__(self):
+        return u"{}".format(self.party.name)
+
+class MemberVotingStatistics(models.Model):
+    member = models.OneToOneField('mks.Member', related_name='voting_statistics')
+
+    def votes_against_party_count(self, from_date = None):
+        if from_date:
+            return VoteAction.objects.filter(member=self.member, against_party=True, vote__time__gt=from_date).count()
+        else:
+            return VoteAction.objects.filter(member=self.member, against_party=True).count()
+
+    def votes_count(self, from_date = None):
+        if from_date:
+            return VoteAction.objects.filter(member=self.member, vote__time__gt=from_date).exclude(type='no-vote').count()
+        else:
+            cache_name = 'votes_count_{}'.format(self.member.id)
+            vc = cache.get(cache_name)
+            if not vc:
+                vc = VoteAction.objects.filter(member=self.member).exclude(type='no-vote').count()
+                cache.set(cache_name, vc, settings.LONG_CACHE_TIME)
+            return vc
+
+    def average_votes_per_month(self):
+        if hasattr(self, '_average_votes_per_month'):
+            return self._average_votes_per_month
+        st = self.member.service_time()
+        if st:
+                self._average_votes_per_month =  30.0*self.votes_count()/st
+        else:
+                self._average_votes_per_month = 0
+        return self._average_votes_per_month
+
+    def discipline(self, from_date = None):
+        total_votes = self.votes_count(from_date)
+        if total_votes <= 3: # not enough data
+            return None
+        votes_against_party = self.votes_against_party_count(from_date)
+        return round(100.0*(total_votes-votes_against_party)/total_votes,1)
+
+    def coalition_discipline(self, from_date = None): # if party is in opposition this actually returns opposition_discipline
+        total_votes = self.votes_count(from_date)
+        if total_votes <= 3: # not enough data
+            return None
+        if self.member.current_party.is_coalition:
+            v = VoteAction.objects.filter(member=self.member, against_coalition=True)
+        else:
+            v = VoteAction.objects.filter(member=self.member, against_opposition=True)
+        if from_date:
+            v = v.filter(vote__time__gt=from_date)
+        votes_against_coalition = v.count()
+        return round(100.0*(total_votes-votes_against_coalition)/total_votes,1)
+
+
+    def __unicode__(self):
+        return "%s" % self.member.name
+
+import listeners
+del listeners

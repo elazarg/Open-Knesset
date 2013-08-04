@@ -59,8 +59,8 @@ class Committee(models.Model):
         ret = Annotation.objects.filter(content_type=protocol_part_ct)
         return ret.extra(tables = [protocol_part_tn,
                     meeting_tn, committee_tn],
-                    where = [ "%s.object_id=%s.id" % (annotation_tn, protocol_part_tn),
-                              "%s.meeting_id=%s.id" % (protocol_part_tn, meeting_tn),
+                    where = [ "{}.object_id={}.id".format(annotation_tn, protocol_part_tn),
+                              "{}.meeting_id={}.id".format(protocol_part_tn, meeting_tn),
                               "%s.committee_id=%%s" % meeting_tn],
                     params = [ self.id ]).distinct()
 
@@ -158,32 +158,31 @@ class CommitteeMeeting(models.Model):
         verbose_name = _('Committee Meeting')
         verbose_name_plural = _('Committee Meetings')
 
-    def title (self):
-        truncator = Truncator(self.topics)
-        return truncator.words(12)
+    @property
+    def title(self):
+        return Truncator(self.topics).words(12)
 
     def __unicode__(self):
-        cn = cache.get('committee_%d_name' % self.committee_id)
+        cachename = 'committee_{}_name'.format(self.committee_id)
+        cn = cache.get(cachename)
         if not cn:
-            if self.committee.type=='plenum':
-                cn='Plenum'
+            if self.committee.type == 'plenum':
+                cn = 'Plenum'
             else:
                 cn = unicode(self.committee)
-            cache.set('committee_%d_name' % self.committee_id,
-                      cn,
-                      settings.LONG_CACHE_TIME)
-        if cn=='Plenum':
-            return (u"%s" % (self.title())).replace("&nbsp;", u"\u00A0")
+            cache.set(cachename, cn, settings.LONG_CACHE_TIME)
+        if cn == 'Plenum':
+            res = u"{}".format(self.title)
         else:
-            return (u"%s - %s" % (cn,
-                                self.title())).replace("&nbsp;", u"\u00A0")
+            res = u"{} - {}".format(cn,  self.title)
+        return res.replace(u"&nbsp;", u"\u00A0") 
 
     @models.permalink
     def get_absolute_url(self):
         if self.committee.type=='plenum':
-            return ('plenum-meeting', [str(self.id)])
+            return ('plenum-meeting', [unicode(self.id)])
         else:
-            return ('committee-meeting', [str(self.id)])
+            return ('committee-meeting', [unicode(self.id)])
 
     def _get_tags(self):
         tags = Tag.objects.get_for_object(self)

@@ -593,25 +593,25 @@ class BillListView (BillListMixin, HashnavListView):
 
     def get_context(self):
         context = super(BillListView, self).get_context()
-        r = [['?%s=%s'% (x[0],x[1]),x[2],False,x[1]] for x in self.friend_pages]
+        r = [['?{}={}'.format(x[0], x[1]), x[2], False, x[1]] for x in self.friend_pages]
         stage = self.request.GET.get('stage', False)
         booklet = self.request.GET.get('booklet', False)
         member = self.request.GET.get('member', False)
-        if stage and stage!='all':
+        if stage and stage != 'all':
             for x in r:
-                if x[3]==stage:
+                if x[3] == stage:
                     x[2] = True
                     break
             if stage in self.bill_stages_names:
                 context['stage'] = self.bill_stages_names.get(stage)
                 context['title'] = _('Bills %(stage)s') % {'stage':context['stage']}
         elif booklet:
-            context['title']=_('Bills published in knesset booklet number %s') % booklet
+            context['title'] = _('Bills published in knesset booklet number %s') % booklet
         else:
             r[0][2] = True
         if member:
             context['member'] = get_object_or_404(Member, pk=member)
-            context['member_url'] = reverse('member-detail',args=[context['member'].id])
+            context['member_url'] = reverse('member-detail', args=[context['member'].id])
             if stage in self.bill_stages_names:
                 context['title'] = _('Bills %(stage)s by %(member)s') % {'stage': self.bill_stages_names[stage], 'member':context['member'].name}
             else:

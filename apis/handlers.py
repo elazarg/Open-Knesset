@@ -77,9 +77,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
     def discipline(member):
         x = member.voting_statistics.discipline()
         if x:
-            return round(x,2)
-        else:
-            return None
+            return round(x, 2)
 
     #@staticmethod
     #def bills(member):
@@ -118,8 +116,8 @@ class MemberHandler(BaseHandler, HandlerExtensions):
     def average_weekly_presence_rank(member):
         ''' Calculate the distribution of presence and place the user on a 5 level scale '''
         SCALE = 5.0
-
-        rel_location = cache.get('average_presence_location_{}'.format(member.id))
+        cache_fmt = 'average_presence_location_{}'
+        rel_location = cache.get(cache_fmt.format(member.id))
         if not rel_location:
 
             presence_list = [m.average_weekly_presence_hours for m in Member.objects.all()]
@@ -134,7 +132,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
                 else:
                     mk_location = 0
 
-                cache.set('average_presence_location_{}'.format(mk.id), mk_location, 60*60*24)
+                cache.set(cache_fmt.format(mk.id), mk_location, 60*60*24)
 
                 if mk.id == member.id:
                     rel_location = mk_location
@@ -157,14 +155,12 @@ class MemberHandler(BaseHandler, HandlerExtensions):
     @staticmethod
     def member(member):
         qs = MemberHandler.qs.filter(member=member)
-        return map(lambda o: dict(url=o.party.get_absolute_url(),
-                     name=o.party.name,
-                     since=o.start_date,
-                     until=o.end_date,
-                     ), qs)
+        return [{'url':o.party.get_absolute_url(),
+                'name':o.party.name,
+                'since':o.start_date,
+                'until':o.end_date} for o in qs]
 
     def read(self, request, **kwargs):
-        #I suppose it's "id" and not the built-in function id
         if 'id' not in kwargs and 'q' in request.GET:
             q = urllib.unquote(request.GET['q'])
             try:
@@ -319,13 +315,16 @@ class BillHandler(BaseHandler, HandlerExtensions):
         return { 'first' : first_committee, 'second' : second_committee, 'all' : first_committee + second_committee }
 
     @staticmethod
+    def _get_mksdetails_from(qs):
+        return [ { 'id': x.id, 'name' : x.name, 'party' : x.current_party.name, 'img_url' : x.img_url } for x in qs ]
+
+    @staticmethod
     def proposing_mks(bill):
-        return [ { 'id': x.id, 'name' : x.name, 'party' : x.current_party.name, 'img_url' : x.img_url } for x in bill.proposers.all() ]
+        return BillHandler._get_mksdetails_from(bill.proposers.all())
 
     @staticmethod
     def joining_mks(bill):
-        return [ { 'id': x.id, 'name' : x.name, 'party' : x.current_party.name,
-                  'img_url' : x.img_url } for x in bill.joiners.all() ]
+        return BillHandler._get_mksdetails_from(bill.joiners.all())
 
     @staticmethod
     def tags(bill):
@@ -447,7 +446,7 @@ class CommitteeHandler(BaseHandler, HandlerExtensions):
     @staticmethod
     def recent_meetings(committee):
         return [ { 'url': x.get_absolute_url(),
-                   'title': x.title(),
+                   'title': x.title,
                    'date': x.date }
                 for x in committee.recent_meetings() ]
 

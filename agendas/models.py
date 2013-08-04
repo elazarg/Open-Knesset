@@ -109,10 +109,6 @@ class AgendaVote(Important):
     def keyname():
         return 'vote'
     
-    @property
-    def title(self):
-        return self.key.title    
-
     def get_importance_header(self):
         return _('Importance')
 
@@ -165,10 +161,6 @@ class AgendaMeeting(Scorable):
     def keyname():
         return 'meeting'
 
-    @property
-    def title(self):
-        return self.key.title()
-    
     def detail_view_url(self):
         return reverse('agenda-meeting-detail', args=[self.pk])
 
@@ -197,10 +189,6 @@ class AgendaBill(Important):
     def keyname():
         return 'bill'
 
-    @property
-    def title(self):
-        return self.key.full_title
-    
     def detail_view_url(self):
         return reverse('agenda-bill-detail', args=[self.pk])
 

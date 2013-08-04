@@ -23,8 +23,8 @@ def record_bill_proposal(**kwargs):
     else:
         verb = 'joined'
     for mk_id in kwargs['pk_set']:
-        if Action.objects.filter(actor_object_id=mk_id, actor_content_type=member_ct, verb=verb, target_object_id=proposal.id, 
-                target_content_type=private_proposal_ct).count()==0:
+        if not Action.objects.filter(actor_object_id=mk_id, actor_content_type=member_ct, verb=verb, target_object_id=proposal.id, 
+                target_content_type=private_proposal_ct).exists():
             mk = Member.objects.get(pk=mk_id)
             action.send(mk, verb=verb, target=proposal, timestamp=proposal.date)
 
