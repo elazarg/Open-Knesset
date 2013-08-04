@@ -191,7 +191,7 @@ class CommitteeMeeting(models.Model):
     def _set_tags(self, tag_list):
         Tag.objects.update_tags(self, tag_list)
 
-    tags = property(_get_tags, _set_tags)
+    tags = property(Tag.objects.get_for_object, Tag.objects.update_tags)
 
     def save(self, **kwargs):
         super(CommitteeMeeting, self).save(**kwargs)

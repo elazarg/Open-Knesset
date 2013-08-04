@@ -392,14 +392,14 @@ class PartyListView(ListView):
             if todo:
                 context['norm_factor'], context['baseline'] = call(name, *todo) 
         
-        context['title'] = _('Parties by %s') % dict(self.pages)[info]
+        context['title'] = _(u'Parties by %s') % dict(self.pages)[info]
         # prepare data for graphs. We'll be doing loops instead of list
         # comprehensions, to prevent multiple runs on the dataset (ticks, etc)
         ticks = []
         coalition_data = []
         opposition_data = []
 
-        label = '{}<br><a href="{}">{}</a>'
+        label = u'{}<br><a href="{}">{}</a>'
         count = 0  # Make sure we have some value, otherwise things like tests may fail
 
         for count, party in enumerate(context['coalition'], 1):
