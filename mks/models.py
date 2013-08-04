@@ -10,6 +10,9 @@ from mks.managers import (
     BetterManager, KnessetManager, CurrentKnessetMembersManager,
     CurrentKnessetPartyManager)
 
+import logging
+logger = logging.getLogger("open-knesset.mks.models")
+
 GENDER_CHOICES = (
     (u'M', _('Male')),
     (u'F', _('Female')),
@@ -448,4 +451,4 @@ class WeeklyPresence(models.Model):
         self.member.recalc_average_weekly_presence_hours()
 
 # force signal connections
-from listeners import *
+import listeners
