@@ -1,4 +1,4 @@
-import os
+from os import path as os_path
 
 from django.db import models
 from django.contrib.contenttypes import generic
@@ -9,7 +9,7 @@ from django.conf import settings
 
 from managers import LinksManager
 
-link_file_storage = FileSystemStorage(os.path.join(settings.DATA_ROOT, 'link_files_storage'))
+link_file_storage = FileSystemStorage(os_path.join(settings.DATA_ROOT, 'link_files_storage'))
 
 _default_linktype = False
 def get_default_linktype():
@@ -57,9 +57,11 @@ class LinkedFile(models.Model):
 class ModelWithLinks():
     ''' This is a mixin to be used by classes that have alot of links '''
     def add_link(self, url, title, link_type=None):
+        #TODO: this is not tested. 
         if not link_type:
             link_type = get_default_linktype()
-        Links.objects.create(content_object=self, url=url, title=title,
+        Link.objects.create(content_object=self, url=url, title=title,
                              link_type=link_type)
     def get_links(self):
-        return Links.objects.filter(active=True, content_object=self)
+        #TODO: this is not tested. 
+        return Link.objects.filter(active=True, content_object=self)
