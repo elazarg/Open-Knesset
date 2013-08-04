@@ -2,15 +2,10 @@
 from datetime import date
 from dateutil.relativedelta import relativedelta
 from django.db import models
-from django.core.cache import cache
 from django.core.urlresolvers import reverse
-from django.db.models import Q, Max
 from django.utils.translation import ugettext_lazy as _, ugettext
 from django.contrib.auth.models import User
 from planet.models import Blog
-from knesset.utils import cannonize
-from links.models import Link
-import difflib
 from mks.managers import (
     BetterManager, KnessetManager, CurrentKnessetMembersManager,
     CurrentKnessetPartyManager)
@@ -101,10 +96,10 @@ class Party(models.Model):
         # for current knesset, we want to display by selecting is_current,
         # for older ones, it's not relevant
         if self.knesset == Knesset.objects.current_knesset():
-            return self.members.filter(
-                is_current=True).order_by('current_position')
+            res = self.members.filter(is_current=True)
         else:
-            return self.all_members.order_by('current_position')
+            res = self.all_members
+        return res.order_by('current_position')
 
     def past_members(self):
         return self.members.filter(is_current=False)
@@ -129,12 +124,9 @@ class Party(models.Model):
     def is_coalition_at(self, date):
         """Returns true is this party was a part of the coalition at the given
         date"""
-        memberships = CoalitionMembership.objects.filter(party=self)
-        for membership in memberships:
-            if (not membership.start_date or membership.start_date <= date) and\
-               (not membership.end_date or membership.end_date >= date):
-                return True
-        return False
+        return not all( membership.start_date and membership.start_date > date or
+                        membership.end_date and membership.end_date < date
+                        for membership in CoalitionMembership.objects.filter(party=self))        
 
     @models.permalink
     def get_absolute_url(self):
@@ -235,6 +227,7 @@ class Member(models.Model):
         return self.name
 
     def name_with_dashes(self):
+        #TODO: re.sub()
         return self.name.replace(' - ', ' ').replace("'", "").replace(u"”", '').replace("`", "").replace("(", "").replace(")", "").replace(u'\xa0', ' ').replace(' ', '-')
 
     def Party(self):
@@ -291,10 +284,7 @@ class Member(models.Model):
 
         strings = []
         for c in cl:
-            if c.m1 == self:
-                m = c.m2
-            else:
-                m = c.m1
+            m = c.m2 if c.m1 == self else c.m1
             strings.append(
                 "%s (%.0f)" % (m.NameWithLink(), 100 * c.normalized_score))
         return ", ".join(strings)
@@ -317,7 +307,7 @@ class Member(models.Model):
     def average_weekly_presence(self):
         hours = WeeklyPresence.objects.filter(
             member=self).values_list('hours', flat=True)
-        if len(hours):
+        if hours:
             return round(sum(hours) / len(hours), 1)
         else:
             return None
@@ -366,11 +356,9 @@ class Member(models.Model):
 
         return [x.strip() for x in self.get_role.split('|')]
 
-	@property
-	def committees(self):
-		"""Committee list (splitted by comma)"""
-
-		return [x.strip() for x in self.committees.split(',')]
+    @property
+    def committees(self):
+        return [x.strip() for x in self.committees.split(',')]
 
     @property
     def is_minister(self):
