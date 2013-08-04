@@ -20,7 +20,7 @@ from mks.models import Member, Party
 from apis.urls import vote_handler
 
 from forms import (EditAgendaForm, AddAgendaForm,
-                   VoteLinkingFormSet, BillLinkingFormSet, MeetingLinkingFormSet)
+                   VoteLinkingForm, BillLinkingForm, MeetingLinkingForm)
 from models import Agenda, AgendaVote, AgendaMeeting, AgendaBill
 
 import queries
@@ -98,7 +98,7 @@ class AgendaDetailView(DetailView):
 
     def get_object(self):
         obj = super(AgendaDetailView, self).get_object()
-        has_id = Agenda.objects.get_relevant_for_user(user=self.request.user).filter(pk=obj.id).count() > 0
+        has_id = Agenda.objects.get_relevant_for_user(user=self.request.user).filter(pk=obj.id).exists()
         if has_id:
             return obj
         else:
@@ -108,7 +108,7 @@ class AgendaDetailView(DetailView):
         context = super(AgendaDetailView, self).get_context_data(*args, **kwargs)
         agenda = context['object']
         try:
-            context['title'] = u"{}".format(agenda.name)
+            context['title'] = _(u"%s") % (agenda.name)
         except AttributeError:
             context['title'] = _('None')
         user = self.request.user
@@ -189,9 +189,10 @@ class AgendaVotesMoreView(GetMoreView):
         return agenda_votes
 
     def get_context_data(self, *args, **kwargs):
-        ctx = super(AgendaVotesMoreView, self).get_context_data(*args, **kwargs)
-        ctx['watched_members'] = self.request.user.get_profile().members if self.request.user.is_authenticated() else False
-        return ctx
+        context = super(AgendaVotesMoreView, self).get_context_data(*args, **kwargs)
+        user = self.request.user
+        context['watched_members'] = user.get_profile().members if user.is_authenticated() else False
+        return context
 
 
 class AgendaBillsMoreView(GetMoreView):
@@ -213,57 +214,31 @@ class AgendaMeetingsMoreView(GetMoreView):
         agenda = get_object_or_404(Agenda, pk=self.kwargs['pk'])
         return agenda.agendameetings.all()
 
+def _log(xid, name, kid):
+    logger.error( _('Attribute error trying to generate title for agenda %d %s %d') % (xid, name, kid))
 
-class AgendaVoteDetailView(DetailView):
+class AbstractSelectableDetailView(DetailView):
+    def get_context_data(self, *args, **kwargs):
+        context = super(AbstractSelectableDetailView , self).get_context_data(*args, **kwargs)
+        rel = context['object']
+        try:
+            context['title'] =  _("Comments on agenda %s %s %s") % (rel.agenda, rel.keyname(), rel.title)
+        except AttributeError:
+            _log(rel.agenda.id, rel.keyname(), rel.key.id)
+            context['title'] =  _('None')
+        return context
+
+class AgendaVoteDetailView(AbstractSelectableDetailView):
     model = AgendaVote
     template_name = 'agendas/agenda_vote_detail.html'
 
-    def get_context_data(self, *args, **kwargs):
-        context = super(AgendaVoteDetailView, self).get_context_data(*args, **kwargs)
-        agendavote = context['object']
-        vote = agendavote.vote
-        agenda = agendavote.agenda
-        try:
-            context['title'] = _("Comments on agenda {agenda} vote {vote}").format(
-                                                    agenda=agenda.name, vote=vote.title)
-        except AttributeError:
-            context['title'] = _('None')
-            logger.error('Attribute error trying to generate title for agenda {} vote {}'.format(agenda.id, vote.id))
-        return context
-
-class AgendaMeetingDetailView(DetailView):
+class AgendaMeetingDetailView(AbstractSelectableDetailView):
     model = AgendaMeeting
     template_name = 'agendas/agenda_meeting_detail.html'
 
-    def get_context_data(self, *args, **kwargs):
-        context = super(AgendaMeetingDetailView , self).get_context_data(*args, **kwargs)
-        agendameeting = context['object']
-        meeting = agendameeting.meeting
-        agenda = agendameeting.agenda
-        try:
-            context['title'] = _("Comments on agenda {agenda} meeting {meeting}").format(
-                                                       agenda=agenda.name, meeting=meeting)
-        except AttributeError:
-            context['title'] = _('None')
-            logger.error('Attribute error trying to generate title for agenda {} meeting {}'.format(agenda.id, meeting.id))
-        return context
-
-class AgendaBillDetailView(DetailView):
+class AgendaBillDetailView(AbstractSelectableDetailView):
     model = AgendaBill
     template_name = 'agendas/agenda_bill_detail.html'
-
-    def get_context_data(self, *args, **kwargs):
-        context = super(AgendaBillDetailView , self).get_context_data(*args, **kwargs)
-        agendabill = context['object']
-        bill = agendabill.bill
-        agenda = agendabill.agenda
-        try:
-            context['title'] = _("Comments on agenda {agenda} bill {bill}").format(
-                                                     agenda=agenda.name,    bill=bill.full_title)
-        except AttributeError:
-            context['title'] = _('None')
-            logger.error('Attribute error trying to generate title for agenda {} bill {}'.format(agenda.id, bill.id))
-        return context
 
 class AgendaMkDetailView(DetailView):
     model = Agenda
@@ -280,25 +255,19 @@ class AgendaMkDetailView(DetailView):
         context['score'] = agenda.member_score(member)
 
         try:
-            context['title'] = _("Analysis of {member} votes by agenda {agenda}").format(member=member.name, agenda=agenda.name)
+            context['title'] = _("Analysis of %s votes by agenda %s") % (member.name, agenda.name)
         except AttributeError:
             context['title'] = _('None')
-            logger.error('Attribute error trying to generate title for agenda {} member {}'.format(self.object_id, self.member_id))
+            _log(self.object_id, 'member', self.member_id)
 
-        related_mk_votes = agenda.related_mk_votes(member)
+        context['related_votes'] = agenda.related_mk_votes(member)
 
-        if self.request.user.is_authenticated():
-            p = self.request.user.get_profile()
-            watched = agenda in p.agendas
-        else:
-            watched = False
-
-        context.update({'watched_object': watched})
-        context.update({'related_votes': related_mk_votes})
-
+        user = self.request.user
+        context['watched_object'] = agenda in user.get_profile().agendas if user.is_authenticated() \
+                                    else False
         return context
 
-class AgendaDetailEditView (DetailView):
+class AgendaDetailEditView(DetailView):
     model = Agenda
     template_name = 'agendas/agenda_detail_edit.html'
 
@@ -381,13 +350,11 @@ def agenda_add_view(request):
     template_name = 'agendas/agenda_add.html'
     return render_to_response(template_name, {'form': form}, context_instance=RequestContext(request))
 
-# general adjuster. perhaps better suited at forms.py
-from collections import namedtuple
-Selector = namedtuple('Selector', ['list',       'type',       'LinkingFormSet', 'has_importance', 'detail'])
-adjuster = { 
-'vote':                  Selector('vote-list',   AgendaVote,     VoteLinkingFormSet, True, 'vote-detail'),
-'bill':                  Selector('bill-list',   AgendaBill,     BillLinkingFormSet, True, 'bill-detail'),
-'committeemeeting':      Selector('committee-list', AgendaMeeting,  MeetingLinkingFormSet, False, 'committee-meeting')
+# general form_selector. perhaps better suited at forms.py
+form_selector = { 
+'vote':                  VoteLinkingForm,
+'bill':                  BillLinkingForm,
+'committeemeeting':      MeetingLinkingForm
 }
 
 @login_required
@@ -395,12 +362,15 @@ def update_editors_agendas(request):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     object_type = request.POST.get('form-0-object_type', None)
-    if object_type not in adjuster:
+    if object_type not in form_selector:
         logger.warn('unknown object_type')
         return HttpResponseRedirect(reverse('main'))
     
-    object_id = request.POST.get('form-0-obj_id', None)
-    vl_formset = adjuster[object_type].LinkingFormSet(request.POST)
+    Form = form_selector[object_type]
+    linked_class = Form.linked_to()
+    Formset = Form.get_formset()
+    
+    vl_formset = Formset(request.POST)
     if not vl_formset.is_valid():
         # TODO: Error handling: what to do with illeal forms?
         logger.info("invalid formset")
@@ -418,32 +388,29 @@ def update_editors_agendas(request):
                     raise Agenda.DoesNotExist()
             except Agenda.DoesNotExist:
                 return HttpResponseForbidden()
-            adjust = adjuster[a['object_type']]
-            agenda_class = adjust.type
-            object_id = a['obj_id']
-            d = {'{}_id'.format(agenda_class.keyname()):object_id, 'agenda_id':a['agenda_id']}
+            type_id = '{}_id'.format(linked_class.keyname())
+            d = {type_id:a['obj_id'], 'agenda_id':a['agenda_id']}
             if a['DELETE']:
                 try:
-                    agenda_class.objects.get(**d).delete()
-                except agenda_class.DoesNotExist:
+                    linked_class.objects.get(**d).delete()
+                except linked_class.DoesNotExist:
                     pass
-            elif a['weight'] and  ((not adjust.has_importance) or a['importance']):
+                continue
+            try:
                 #create:
                 try:
-                    av = agenda_class.objects.get(**d)
-                except agenda_class.DoesNotExist:
-                    av = agenda_class(**{k:int(v) for k, v in d.items()})
-                av.score = a['weight']
-                av.reasoning = a['reasoning']
-                if adjust.has_importance:
-                    av.importance = a['importance']
-                av.save()
-            else:
+                    av = linked_class.objects.get(**d)
+                except linked_class.DoesNotExist:
+                    av = linked_class(**{k:int(v) for k, v in d.items()})
+                av.update(a)
+            except KeyError:
                 logger.info("invalid form: nothing to do")
-                continue
-
+            else:
+                av.save()
+            
+    object_id = request.POST.get('form-0-obj_id', None)
     if object_id:
-        param, kwargs = (adjuster[object_type].detail, {'pk':object_id})
+        param, kwargs = (Form.detailname(), {'pk':object_id})
     else: 
-        param, kwargs = (adjuster[object_type].list, None)
+        param, kwargs = ('{}-list'.format(Form.linked_to().keyname()), None)
     return HttpResponseRedirect(reverse(param, kwargs=kwargs))

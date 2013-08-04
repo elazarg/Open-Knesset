@@ -92,8 +92,8 @@ PQ2 = '''SELECT    a.agenda_id,
 PARTY_QUERY = """
     SELECT a.agenda_id,
            m.id party_id,
-           v.totalvotevalue  * 100.0 / (a.totalscore*m.number_of_seats) score,
-           v.numvotes  * 100.0 / (a.numvotes*m.number_of_seats) volume
+           coalesce(v.totalvotevalue * 100.0 / (a.totalscore*m.number_of_seats), 0.0) score,
+           coalesce(v.numvotes * 100.0 / (a.numvotes*m.number_of_seats), 0.0) volume
     FROM   (SELECT                         agenda_id,
                   SUM(abs(score * importance)) totalscore,
                   COUNT(agenda_id)            numvotes

@@ -68,7 +68,11 @@ class Scorable(models.Model):
 
     def get_score_header(self):
         return _('Position')
-             
+    
+    def update(self, details):
+        self.score = details['weight']
+        self.reasoning = details['reasoning']
+
     class Meta:
         abstract = True
 
@@ -78,12 +82,16 @@ class Important(Scorable):
     def get_importance_header(self):
         return _('Importance')
 
+    def update(self, details):
+        self.importance = details['importance']
+        super(Important, self).update(details)
+        
     class Meta:
         abstract = True
    
 from listeners import Listener, Follower
 
-@Listener(titlegetter=lambda x : x.vote.title)
+@Listener()
 class AgendaVote(Important):
     agenda = models.ForeignKey('Agenda', related_name='agendavotes')
     vote = models.ForeignKey('laws.Vote', related_name='agendavotes')
@@ -100,6 +108,10 @@ class AgendaVote(Important):
     @staticmethod
     def keyname():
         return 'vote'
+    
+    @property
+    def title(self):
+        return self.key.title    
 
     def get_importance_header(self):
         return _('Importance')
@@ -139,7 +151,7 @@ class AgendaVote(Important):
         super(AgendaVote, self).save(*args, **kwargs)
         self.update_monthly_counters()
 
-@Listener(titlegetter=lambda x : x.meeting.title())
+@Listener()
 class AgendaMeeting(Scorable):
     agenda = models.ForeignKey('Agenda', related_name='agendameetings')
     meeting = models.ForeignKey('committees.CommitteeMeeting',
@@ -152,6 +164,10 @@ class AgendaMeeting(Scorable):
     @staticmethod
     def keyname():
         return 'meeting'
+
+    @property
+    def title(self):
+        return self.key.title()
     
     def detail_view_url(self):
         return reverse('agenda-meeting-detail', args=[self.pk])
@@ -168,7 +184,7 @@ class AgendaMeeting(Scorable):
     def __unicode__(self):
         return u"{} {}".format(self.agenda, self.meeting)
 
-@Listener(titlegetter=lambda x : x.bill.full_title)
+@Listener()
 class AgendaBill(Important):
     agenda = models.ForeignKey('Agenda', related_name='agendabills')
     bill = models.ForeignKey('laws.bill', related_name='agendabills')
@@ -180,6 +196,10 @@ class AgendaBill(Important):
     @staticmethod
     def keyname():
         return 'bill'
+
+    @property
+    def title(self):
+        return self.key.full_title
     
     def detail_view_url(self):
         return reverse('agenda-bill-detail', args=[self.pk])

@@ -4,18 +4,19 @@ from django import template
 from django.core.exceptions import ObjectDoesNotExist
 
 from agendas.models import Agenda, UserSuggestedVote
-from agendas.views import adjuster
+from agendas.views import form_selector
 #from django.core.cache import cache
 
 register = template.Library()
 
-def _get_details(a, name, **kwargs):
+def _get_details(a, **kwargs):
     r = {'agenda_name': a.name, 'agenda_id': a.id,
-         'weight':None, 'reasoning': u''}
+         'score':None, 'reasoning': u''}
+    name = kwargs.keys().pop()
     try:
         av = getattr(a, 'agenda{}s'.format(name)).get(**kwargs)
         if av:
-            r['weight'] = av.score
+            r['score'] = av.score
             r['reasoning'] = av.reasoning
             r['importance'] = av.importance
     except (ObjectDoesNotExist,  AttributeError):
@@ -27,12 +28,15 @@ def agendas_for(user, obj, object_type):
     ''' renders the relevent agenda for the object obj and a form for the
         agendas the given user can edit
     '''
-    adjust = adjuster[object_type]
-    d = { adjust.type.keyname() : obj }
+    Form = form_selector[object_type]
+    agenda_class = Form.linked_to()
+    LinkingFormSet = Form.get_formset()    
+    
+    d = { agenda_class.keyname() : obj }
     authenticated = user.is_authenticated()
     
-    formset = adjust.LinkingFormSet(initial = [
-                                    dict(obj_id=obj.id, object_type=object_type, **_get_details(a, adjust.type.keyname(), **d))
+    formset = LinkingFormSet(initial = [
+                                    dict(obj_id=obj.id, object_type=object_type, **_get_details(a, **d))
                                     for a in user.agendas.all()]
                                 ) if authenticated else None
     suggested_agendas = None
@@ -42,7 +46,7 @@ def agendas_for(user, obj, object_type):
         if authenticated:
             suggested_agendas = UserSuggestedVote.objects.filter(user=user, **d)
             
-    agendas = adjust.type.objects.filter(agenda__in=Agenda.objects.get_relevant_for_user(user), **d).distinct()
+    agendas = agenda_class.objects.filter(agenda__in=Agenda.objects.get_relevant_for_user(user), **d).distinct()
 
     return {'formset': formset,
             'agendas': agendas,

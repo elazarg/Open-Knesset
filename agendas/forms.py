@@ -4,7 +4,7 @@ from django.forms.formsets import formset_factory
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
 
-from models import Agenda, AGENDAVOTE_SCORE_CHOICES, IMPORTANCE_CHOICES
+from models import Agenda, AgendaVote, AgendaBill, AgendaMeeting, AGENDAVOTE_SCORE_CHOICES, IMPORTANCE_CHOICES
 
 class H4(forms.Widget):
     """ used to display header fields """
@@ -49,21 +49,57 @@ class AddAgendaForm(ModelForm):
     class Meta:
         model = Agenda
         fields = ('name', 'public_owner_name', 'description')
-
-class MeetingLinkingForm(forms.Form):
-    # a form to help agendas' editors tie meetings to agendas
+        
+class AbstractLinkingForm(forms.Form):
+    # a form to help agendas' editors tie things to agendas
     agenda_name = forms.CharField(widget=H4, required=False, label='')
     obj_id = forms.IntegerField(widget=forms.HiddenInput)
     agenda_id = forms.IntegerField(widget=forms.HiddenInput)
-    weight = forms.TypedChoiceField(label=_('Importance'),
-                                    choices=IMPORTANCE_CHOICES,
-                                    required=False,
-                                    widget=forms.Select)
     reasoning = forms.CharField(required=False, max_length=1000,
                            label=_(u'Reasoning'),
                            widget = forms.Textarea(attrs={'cols':30, 'rows':5}),
                            )
     object_type = forms.CharField(widget=forms.HiddenInput)
+
+    #todo: memoize
+    @classmethod
+    def get_formset(cls):
+        return formset_factory(cls, extra=0, can_delete=True)
+    
+class MeetingLinkingForm(AbstractLinkingForm):
+    # a form to help agendas' editors tie meetings to agendas
+    weight = forms.TypedChoiceField(label=_('Importance'),
+                                    choices=IMPORTANCE_CHOICES,
+                                    required=False,
+                                    widget=forms.Select)
+
+    def clean_weight(self):
+        data = self.cleaned_data['weight']
+        if not data:
+            return 99
+        return data
+
+    def clean(self):
+        cleaned_data = self.cleaned_data
+        if cleaned_data.get('weight') == 99:
+            cleaned_data["DELETE"] = 'on'
+        return cleaned_data
+    
+    @staticmethod
+    def linked_to():
+        return AgendaMeeting
+
+    @classmethod
+    def detailname(cls):
+        return 'committee-meeting'
+
+class AbstractImportantLinkingForm(AbstractLinkingForm):
+    weight = forms.TypedChoiceField(label=_('Position'), choices=AGENDAVOTE_SCORE_CHOICES,
+             required=False, widget=forms.Select)
+    importance = forms.TypedChoiceField(label=_('Importance'),
+                                        choices=IMPORTANCE_CHOICES,
+                                        required=False,
+                                        widget=forms.Select)
 
     def clean_weight(self):
         data = self.cleaned_data['weight']
@@ -77,14 +113,20 @@ class MeetingLinkingForm(forms.Form):
             cleaned_data["DELETE"] = 'on'
         return cleaned_data
 
-class VoteLinkingForm(MeetingLinkingForm):
-    weight = forms.TypedChoiceField(label=_('Position'), choices=AGENDAVOTE_SCORE_CHOICES,
-             required=False, widget=forms.Select)
-    importance = forms.TypedChoiceField(label=_('Importance'),
-                                        choices=IMPORTANCE_CHOICES,
-                                        required=False,
-                                        widget=forms.Select)
+    @classmethod
+    def detailname(cls):
+        return '{}-detail'.format(cls.linked_to().keyname())
 
-VoteLinkingFormSet =    formset_factory(VoteLinkingForm,    extra=0, can_delete=True)
-BillLinkingFormSet =    VoteLinkingFormSet
-MeetingLinkingFormSet = formset_factory(MeetingLinkingForm, extra=0, can_delete=True)
+class VoteLinkingForm(AbstractImportantLinkingForm):
+    @staticmethod
+    def linked_to():
+        return AgendaVote
+
+class BillLinkingForm(AbstractImportantLinkingForm):
+    @staticmethod
+    def linked_to():
+        return AgendaBill
+    
+# VoteLinkingFormSet =    formset_factory(VoteLinkingForm,    extra=0, can_delete=True)
+# BillLinkingFormSet =    formset_factory(BillLinkingForm,    extra=0, can_delete=True)
+# MeetingLinkingFormSet = formset_factory(MeetingLinkingForm, extra=0, can_delete=True)
