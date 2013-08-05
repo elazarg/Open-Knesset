@@ -1,61 +1,14 @@
-{% extends "site_base.html" %}
-{% load i18n %}
-{% block extratitle %}{% trans "Members and Parties" %}{% endblock %}
-{% block description %}{% trans "Members and Parties" %} - {% trans 'Open Knesset - Opening the Knesset to the public' %}{% endblock %}
-{% block extrajs %}
-    <script type="text/javascript">
-        $(function() {
-            $('a[rel="tooltip"]').tooltip();
-        });
-    </script>
+{% extends "mks/parties_members_base.html" %}
+
+{% block other_type %}
+     <a href="{{kn.get_absolute_url}}raw">{{kn}}</a>
 {% endblock %}
 
-{% block nav-parties %}class="active"{% endblock %}
-{% block breadcrumbs %}
-            <li class="active">{% trans "Members and Parties" %} {{object}}</li>
-{% endblock %}
-
-{% block divcontent %}
-    <div class="row">
-        <div class="span3">
-            <h1>{{ object }}</h1>
-        </div>
-        <div class="span2">
-            <h5><a href="{% url 'parties-members-list' knesset_number %}">{% trans "With pictures" %}</a></h5>
-        </div>
-        <div class="span3">
-            <div class="alert">
-            {% trans "See also" %}:
-            {% for kn in other_knessets %}
-                <a href="{{kn.get_absolute_url}}raw">{{kn}}</a>
-            {% endfor %}
-            </div>
-        </div>
-        <div class="span4">
-            <div class="alert">
-                {% trans "Looking for comparisons ? Compare between" %}
-                <a href="{% url 'party-list' %}">{% trans "Parties" %}</a> {% trans "Or" %}
-                <a href="{% url 'member-list' %}">{% trans "Members" %}</a>
-            </div>
-        </div>
-    </div>
-    <div class="row">
-	{% for side in sides %}    
-      <div class="cards span12">
-        <section class="card card-list card-list-latest compact">
-        	<header><h1>{% if forloop.last %}{% trans "Opposition" %}{% else %}{% trans "Coalition" %}{% endif %}</h1></header>
-            <ul>
-            {% for party in side %}
-            		<h5><a href="{{party.get_absolute_url}}">{{party.name}}<a>:</h5>
-                    <p>
-                    {% for member in party.current_members %}
-                    	<a href="{{member.get_absolute_url}}">{{member.name}}<a>{% if forloop.last %}.{% else %},{% endif %}
-                    {% endfor %}
-                    </p>
-            {% endfor %}
-            </ul>
-        </section>
-      </div>
-    {% endfor %}  
-    </div>
+{% block actual_content %}
+	<h5><a href="{{party.get_absolute_url}}">{{party.name}}<a>:</h5>
+    <p>
+    {% for member in party.current_members %}
+    	<a href="{{member.get_absolute_url}}">{{member.name}}<a>{% if forloop.last %}.{% else %},{% endif %}
+    {% endfor %}
+    </p>
 {% endblock %}
