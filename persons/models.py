@@ -2,11 +2,10 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
-from django.forms.fields import IntegerField
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 
-from mks.models import Member, GENDER_CHOICES
+from mks.models import Member
 from .managers import PersonManager
 
 
@@ -21,7 +20,7 @@ class PersonAlias(models.Model):
     person = models.ForeignKey('Person', related_name='aliases')
 
     def __unicode__(self):
-        return "%s -> %s" % (self.name, self.person.name)
+        return u'{} -> {}'.format(self.name, self.person.name)
 
 GENDER_CHOICES = (
     (u'M', _('Male')),

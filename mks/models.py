@@ -27,7 +27,7 @@ class Correlation(models.Model):
     not_same_party = models.NullBooleanField()
 
     def __unicode__(self):
-        return "%s - %s - %.0f" % (self.m1.name, self.m2.name, self.normalized_score)
+        return u"{} - {} - {0:.0f}".format(self.m1.name, self.m2.name, self.normalized_score)
 
 
 class CoalitionMembership(models.Model):
@@ -40,9 +40,9 @@ class CoalitionMembership(models.Model):
         ordering = ('party', 'start_date')
 
     def __unicode__(self):
-        return "%s %s %s" % ((self.party.name,
+        return u"{} {} {}".format(self.party.name,
                               self.start_date or "",
-                              self.end_date or ""))
+                              self.end_date or "")
 
 
 class Knesset(models.Model):
@@ -445,7 +445,7 @@ class WeeklyPresence(models.Model):
         blank=True)  # number of hours this member was present during this week
 
     def __unicode__(self):
-        return "%s %s %.1f" % (self.member.name, str(self.date), self.hours)
+        return u"{} {} {0:.1f}".format(self.member.name, self.date, self.hours)
 
     def save(self, **kwargs):
         super(WeeklyPresence, self).save(**kwargs)

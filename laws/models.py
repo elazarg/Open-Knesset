@@ -45,7 +45,7 @@ class VoteAction(models.Model):
     against_opposition = models.BooleanField(default=False)
     against_own_bill = models.BooleanField(default=False)
     def __unicode__(self):
-        return "%s %s %s" % (self.member.name, self.type, self.vote.title)
+        return u"{} {} {}".format(self.member.name, self.type, self.vote.title)
 
 class VoteManager(models.Manager):
     # TODO: add i18n to the types so we'd have
@@ -131,7 +131,7 @@ class Vote(models.Model):
         verbose_name_plural = _('Votes')
 
     def __unicode__(self):
-        return "{} ({})".format(self.title, self.time_string)
+        return u"{} ({})".format(self.title, self.time_string)
 
     @property
     def passed(self):
@@ -706,7 +706,7 @@ class GovLegislationCommitteeDecision(models.Model):
     stand = models.IntegerField(blank=True, null=True)
     number = models.IntegerField(blank=True, null=True)
     def __unicode__(self):
-        return u"%s" % (self.title)
+        return u"{}".format(self.title)
 
     def get_absolute_url(self):
         return self.bill.get_absolute_url()
@@ -866,7 +866,7 @@ class MemberVotingStatistics(models.Model):
 
 
     def __unicode__(self):
-        return "%s" % self.member.name
+        return u"{}".format(self.member.name)
 
 import listeners
 del listeners

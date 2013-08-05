@@ -28,7 +28,7 @@ mksurlpatterns = patterns('mks.views',
 
     url(r'^party/$',  cached(mkv.PartyRedirectView.as_view()), name='party-list'),
     url(r'^party/(?P<pk>\d+)/$', cached(mkv.PartyDetailView.as_view()), name='party-detail'),
-    url(r'^party/(?P<pk>\d+)/(?P<slug>[\w\-\"]+)/$', mkv.PartyDetailView.as_view(), name='party-detail-with-slug'),
+    url(r'^party/(?P<pk>\d+)/(?P<slug>[\w\-\"]+)/$', cached(mkv.PartyDetailView.as_view()), name='party-detail-with-slug'),
     url(r'^party/by/(?P<stat_type>' + '|'.join(x[0] for x in mkv.PartyListView.pages) + ')/$', cached(mkv.PartyListView.as_view()), name='party-stats'),
     url(r'^party/search/?$', mkv.party_by_name, name='party-by-name'),
 )

@@ -38,9 +38,9 @@ class Committee(models.Model):
 
     def __unicode__(self):
         if self.type=='plenum':
-            return "%s" % ugettext('Plenum')
+            return u"%s" % ugettext('Plenum')
         else:
-            return "%s" % self.name
+            return u"{}".format(self.name)
 
     @models.permalink
     def get_absolute_url(self):
@@ -167,11 +167,11 @@ class CommitteeMeeting(models.Model):
         cn = cache.get(cachename)
         if not cn:
             if self.committee.type == 'plenum':
-                cn = 'Plenum'
+                cn = u'Plenum'
             else:
                 cn = unicode(self.committee)
             cache.set(cachename, cn, settings.LONG_CACHE_TIME)
-        if cn == 'Plenum':
+        if cn == u'Plenum':
             res = u"{}".format(self.title)
         else:
             res = u"{} - {}".format(cn,  self.title)
@@ -312,7 +312,7 @@ class ProtocolPart(models.Model):
                                                     self.meeting.id, self.order)
 
     def __unicode__(self):
-        return "%s %s: %s" % (self.meeting.committee.name, self.header,
+        return u"{} {}: {}".format(self.meeting.committee.name, self.header,
                               self.header)
 
 TOPIC_PUBLISHED, TOPIC_FLAGGED, TOPIC_REJECTED,\
@@ -386,7 +386,7 @@ class Topic(models.Model):
         return ('topic-detail', [str(self.id)])
 
     def __unicode__(self):
-        return "%s" % self.title
+        return self.title
 
     objects = TopicManager()
 

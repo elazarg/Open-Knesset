@@ -555,7 +555,7 @@ class SummaryAgenda(models.Model):
     db_updated = models.DateTimeField(auto_now=True)
 
     def __unicode__(self):
-        return '{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type,
+        return u'{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type,
                                             self.mk or 'n/a', self.score, self.votes)
 
 def dateMonthTruncate(dt):
