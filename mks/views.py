@@ -321,7 +321,7 @@ class PartyListView(ListView):
         ('seats', _('By Number of seats')),
         ('votes-per-seat', _('By votes per seat')),
         ('discipline', _('By factional discipline')),
-        ('coalition-discipline', _('By coalition/opposition discipline')),
+        ('discipline-coalition', _('By coalition/opposition discipline')),
         ('residence-centrality', _('By residence centrality')),
         ('residence-economy', _('By residence economy')),
         ('bills-proposed', _('By bills proposed')),
@@ -329,87 +329,89 @@ class PartyListView(ListView):
         ('bills-first', _('By bills passed first vote')),
         ('bills-approved', _('By bills approved')),
         ('presence', _('By average weekly hours of presence')),
-        ('committees', _('By average monthly committee meetings')),
+        ('presence-committees', _('By average monthly committee meetings')),
     )
+    
+    def calculate_bills(self, info, qs):
+        extras = {}
+        s2 = {'pre':       Q(stage__in={'2','3','4','5','6'}),
+              'first':     Q(stage__in={'4','5','6'}),
+              'approved':  Q(stage='6'),
+              'proposed':  Q() }
+        bills = Bill.objects.filter(s2[info.split('-')[1]])
+        m = 9999
+        for p in qs:
+            x = bills.filter(Q(proposers__current_party=p)).values_list('id',flat=True).distinct().count()
+            if False:
+                x = round(float(x)/p.number_of_seats, 1)
+            extras[p] = x
+            m = min(m, x)
+        return (m/2, 0), False, extras
+    
+    def calculate_general_statistics(self, info, qs):
+        extras = {}
+        def callback(getbyattr, start, norm, baseline, choose, call):
+            m = start
+            for p in qs:
+                if call:
+                    rc = filter(None, [call(getbyattr(x)) for x in p.members.all()])
+                    x = len(rc) and round(float(sum(rc)) / len(rc), 1)
+                else:
+                    x = getbyattr(p.voting_statistics)()
+                extras[p] = x
+                m = choose(m, x)
+            return norm(m), baseline(m)
+        
+        statistics = {#start, norm,                     baseline,      choose, call |     group_by_all
+        'votes':      ((0,    lambda m : m/20,          lambda m : 0,   max,   False),          True),
+        'discipline': ((100,  lambda m : (100.0-m)/15,  lambda m : m-2, min,   False),         False),
+        'residence':  ((10,   lambda m : (10.0-m)/15,   lambda m : m-1, min,   lambda x : x),   True),
+        'presence':   ((9999, lambda m : m/2,           lambda m : 0,   min,   lambda x : x()), True)
+        }
+        
+        attribute_select = {
+        'votes-per-seat':       'votes_per_seat',
+        'discipline':           'discipline',
+        'discipline-coalition': 'coalition_discipline',
+        'residence-centrality': 'residence_centrality',
+        'residence-economy':    'residence_economy',
+        'presence':             'average_weekly_presence',
+        'presence-committees':  'committee_meetings_per_month'
+        }
+        attr, (todo, group_by_all) = attribute_select[info], statistics[info.split('-')[0]]
+        return callback(attrgetter(attr), *todo), group_by_all, extras        
 
+    def calculate_seats(self, info, qs):
+        qs = qs.annotate(extra=Sum('number_of_seats'))
+        #TODO: it's a shame to waste the annotation like this
+        return (1, 0), True, {p:p.extra for p in qs}
+        
     def get_context_data(self, **kwargs):
         context = super(PartyListView, self).get_context_data(**kwargs)
-        qs = context['object_list']
+        qs = context['object_list'].select_related()
+        info = context['stat_type'] = self.kwargs['stat_type']
+        context['friend_pages'] = self.pages
 
-        info = self.kwargs['stat_type']
-
+        if info=='seats':              func = self.calculate_seats 
+        elif info.startswith('bills'): func = self.calculate_bills
+        else:                          func = self.calculate_general_statistics
+        (context['norm_factor'], context['baseline']), group_by_all, extras = func(info, qs)
+        
         context['coalition'] = qs.filter(is_coalition=True)
         context['opposition'] = qs.filter(is_coalition=False)
-
-        context['friend_pages'] = self.pages
-        context['stat_type'] = info
-
-        if info=='seats':
-            context['coalition']  =  context['coalition'].annotate(extra=Sum('number_of_seats')).order_by('-extra')
-            context['opposition'] = context['opposition'].annotate(extra=Sum('number_of_seats')).order_by('-extra')
-            context['norm_factor'] = 1
-            context['baseline'] = 0
-        elif info.startswith('bills'):
-            s2 = {'bills-pre':       [Q(stage='2')|Q(stage='3')|Q(stage='4')|Q(stage='5')|Q(stage='6')] , 
-                  'bills-first':     [Q(stage='4')|Q(stage='5')|Q(stage='6')] ,
-                  'bills-approved':  [Q(stage='6')] ,
-                  'bills-proposed':  [] }
-            qlist = s2[info]
-            m = 9999
-            for p in qs:
-                x = len(set(Bill.objects.filter(Q(proposers__current_party=p), *qlist).values_list('id',flat=True))) /p.number_of_seats
-                if qlist:
-                    x = round(float(x, 1))
-                p.extra = x
-                m = min(m, p.extra)
-            context['norm_factor'], context['baseline']= m/2, 0
-        else:
-            x1 = (0, lambda m : m/20, lambda m : 0, max, False)
-            x2 = (100, lambda m : (100.0-m)/15, lambda m : m-2, min, False)
-            x3 = (10, lambda m :   (10.0-m)/15, lambda m : m-1, min, lambda x : x)
-            x4 = (9999, lambda m :m/2, lambda m : 0, min, lambda x : x())
-            
-            def call(name, start, norm, baseline, choose, call = False):
-                m = start
-                for p in qs:
-                    if call:
-                        rc = [call(getattr(member, name)) for member in p.members.all() if call(getattr(member, name))]
-                        p.extra = len(rc) or round(float(sum(rc))/len(rc),1)
-                    else:
-                        p.extra = getattr(p.voting_statistics, name)()
-                    m = choose(m, p.extra)
-                return norm(m), baseline(m)
-            s1={
-            'votes-per-seat':       ('votes_per_seat', x1),
-            'discipline':           ('discipline', x2),
-            'coalition-discipline': ('coalition_discipline', x2),
-            'residence-centrality': ('residence_centrality', x3),
-            'residence-economy':    ('residence_economy', x3),
-            'presence':             ('average_weekly_presence', x4),
-            'committees':           ('committee_meetings_per_month', x4)
-            }
-            name, todo = s1.get(info)
-            if todo:
-                context['norm_factor'], context['baseline'] = call(name, *todo) 
         
         context['title'] = _(u'Parties by %s') % dict(self.pages)[info]
+        
         # prepare data for graphs. We'll be doing loops instead of list
         # comprehensions, to prevent multiple runs on the dataset (ticks, etc)
-        ticks = []
+        fmt = u'{}<br><a href="{}">{}</a>' 
+        parties = list(enumerate(sorted(qs, key= lambda x : extras[x], reverse=True), 1))
+        ticks = [(count + 0.5, fmt.format(extras[party], party.get_absolute_url(), party.name)) for count, party in parties]
         coalition_data = []
         opposition_data = []
-
-        label = u'{}<br><a href="{}">{}</a>'
-        count = 0  # Make sure we have some value, otherwise things like tests may fail
-
-        for count, party in enumerate(context['coalition'], 1):
-            coalition_data.append((count, party.extra))
-            ticks.append((count + 0.5, label.format(party.extra, party.get_absolute_url(), party.name)))
-
-        for opp_count, party in enumerate(context['opposition'], count + 1):
-            opposition_data.append((opp_count, party.extra))
-            ticks.append((opp_count + 0.5, label.format(party.extra, party.get_absolute_url(), party.name)))
-
+        for count, party in parties:
+            (coalition_data if party.is_coalition else opposition_data).append( (count, extras[party]) )
+        
         graph_data = {
             'data': [
                 {'label': _('Coalition'), 'data': coalition_data},

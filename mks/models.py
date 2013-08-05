@@ -84,7 +84,7 @@ class Party(models.Model):
     @property
     def uri_template(self):
         # TODO: use the Site's url from django.contrib.site
-        return "%s/api/party/%s/htmldiv/" % ('', self.id)
+        return "{}/api/party/{}/htmldiv/".format('', self.id)
 
     def __unicode__(self):
         if self.is_current:
@@ -111,10 +111,10 @@ class Party(models.Model):
         return self.name.replace("'", '"').replace(' ', '-')
 
     def Url(self):
-        return "/admin/simple/party/%d" % self.id
+        return "/admin/simple/party/{}".format(self.id)
 
     def NameWithLink(self):
-        return '<a href="%s">%s</a>' % (self.get_absolute_url(), self.name)
+        return u'<a href="{}">{}</a>'.format(self.get_absolute_url(), self.name)
     NameWithLink.allow_tags = True
 
     def MembersString(self):
@@ -151,7 +151,7 @@ class Membership(models.Model):
     position = models.PositiveIntegerField(blank=True, default=999)
 
     def __unicode__(self):
-        return "%s-%s (%s-%s)" % (self.member.name, self.party.name, str(self.start_date), str(self.end_date))
+        return u"{}-{} ({}-{})".format(self.member.name, self.party.name, self.start_date, self.end_date)
 
 
 class MemberAltname(models.Model):
@@ -452,3 +452,4 @@ class WeeklyPresence(models.Model):
 
 # force signal connections
 import listeners
+del listeners

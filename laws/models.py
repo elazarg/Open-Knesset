@@ -329,7 +329,7 @@ class BillProposal(models.Model):
         abstract = True
 
     def __unicode__(self):
-        return u"%s %s" % (self.law, self.title)
+        return u"{} {}".format(self.law, self.title)
 
     def get_absolute_url(self):
         if self.bill:
@@ -409,15 +409,30 @@ class Bill(models.Model):
     popular_name_slug = models.CharField(max_length=1000, blank=True)
     law = models.ForeignKey('Law', related_name="bills", blank=True, null=True)
     stage = models.CharField(max_length=10,choices=BILL_STAGE_CHOICES)
-    stage_date = models.DateField(blank=True, null=True) # date of entry to current stage
-    pre_votes = models.ManyToManyField('Vote',related_name='bills_pre_votes', blank=True, null=True) # link to pre-votes related to this bill
-    first_committee_meetings = models.ManyToManyField('committees.CommitteeMeeting',related_name='bills_first', blank=True, null=True) # CM related to this bill, *before* first vote
-    first_vote = models.ForeignKey('Vote',related_name='bills_first', blank=True, null=True) # first vote of this bill
-    second_committee_meetings = models.ManyToManyField('committees.CommitteeMeeting',related_name='bills_second', blank=True, null=True) # CM related to this bill, *after* first vote
-    approval_vote = models.OneToOneField('Vote',related_name='bill_approved', blank=True, null=True) # approval vote of this bill
-    proposers = models.ManyToManyField('mks.Member', related_name='bills', blank=True, null=True) # superset of all proposers of all private proposals related to this bill
-    joiners = models.ManyToManyField('mks.Member', related_name='bills_joined',
-                                     blank=True, null=True) # superset of all joiners
+    
+    stage_date = models.DateField(blank=True, null=True) 
+    # date of entry to current stage
+    
+    pre_votes = models.ManyToManyField('Vote',related_name='bills_pre_votes', blank=True, null=True) 
+    # link to pre-votes related to this bill
+    
+    first_committee_meetings = models.ManyToManyField('committees.CommitteeMeeting',related_name='bills_first', blank=True, null=True) 
+    # CM related to this bill, *before* first vote
+    
+    first_vote = models.ForeignKey('Vote',related_name='bills_first', blank=True, null=True) 
+    # first vote of this bill
+    
+    second_committee_meetings = models.ManyToManyField('committees.CommitteeMeeting',related_name='bills_second', blank=True, null=True)
+    # CM related to this bill, *after* first vote
+    
+    approval_vote = models.OneToOneField('Vote',related_name='bill_approved', blank=True, null=True)
+    # approval vote of this bill 
+    
+    proposers = models.ManyToManyField('mks.Member', related_name='bills', blank=True, null=True)
+    # superset of all proposers of all private proposals related to this bill 
+    
+    joiners = models.ManyToManyField('mks.Member', related_name='bills_joined',  blank=True, null=True) 
+    # superset of all joiners 
 
     objects = BillManager()
 
