@@ -1,7 +1,7 @@
 from __future__ import division
 
 from itertools import chain
-from operator import itemgetter, attrgetter
+from operator import attrgetter, itemgetter
 from collections import defaultdict
 import math
 
@@ -455,6 +455,7 @@ class Agenda(models.Model):
                         summaries_for_range[s.summary_type].append(s)
                 summaries_for_ranges.append(summaries_for_range)
 
+
             # get list of mk ids
             mk_ids = Member.objects.all().values_list('id', flat=True)
             # compute agenda measures, store results per MK
@@ -471,11 +472,12 @@ class Agenda(models.Model):
                     mk_data = current_mks_data[mk_id]
                     if mk_data:
                         mk_votes = sum(x.votes for x in mk_data)
-                        mk_volume = mk_votes / total_votes
-                        mk_score = sum(x.score for x in mk_data) / total_score
+                        mk_volume = 100*mk_votes / total_votes
+                        mk_score = 100*sum(x.score for x in mk_data) / total_score
                         range_mk_results.append((mk_id, mk_votes, mk_score, mk_volume))
                     else:
                         range_mk_results.append( (mk_id, None, None, None) )
+
                 # sort results by score descending
                 range_mk_results.sort(key=itemgetter(2, 0), reverse=True)
                 for rank, (mk_id, mk_votes, mk_score, mk_volume) in enumerate(range_mk_results):
@@ -557,6 +559,7 @@ class SummaryAgenda(models.Model):
     def __unicode__(self):
         return u'{} {} {} {} ({},{})'.format(self.agenda, self.month, self.summary_type,
                                             self.mk or 'n/a', self.score, self.votes)
+
 
 def dateMonthTruncate(dt):
     return dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
