@@ -21,13 +21,13 @@
             <h1>{{ object }}</h1>
         </div>
         <div class="span2">
-            <h5><a href="{% url 'parties-members-list' knesset_number %}">{% trans "With pictures" %}</a></h5>
+            <h5><a href="{% block other_type_link %}{% endblock %}">{% block other_type_name %}{% endblock %}</a></h5>
         </div>
         <div class="span3">
             <div class="alert">
             {% trans "See also" %}:
             {% for kn in other_knessets %}
-            	{% block other_type %}{% endblock %}
+            	{% block other_knesset %}{% endblock %}
             {% endfor %}
             </div>
         </div>
@@ -40,6 +40,7 @@
         </div>
     </div>
     <div class="row">
+    {% if sides %} 
 	{% for side in sides %}    
       <div class="cards span12">
         <section class="card card-list card-list-latest compact">
@@ -52,5 +53,6 @@
         </section>
       </div>
     {% endfor %}  
+    {% endif %}
     </div>
 {% endblock %}

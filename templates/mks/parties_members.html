@@ -1,6 +1,10 @@
 {% extends "mks/parties_members_base.html" %}
+{% load i18n %}
 
-{% block other_type %}
+{% block other_type_link %}{% url 'parties-members-list-raw' knesset_number %}{% endblock %}
+{% block other_type_name %}{% trans "Text only" %}{% endblock %}
+
+{% block other_knesset %}
      <a href="{{kn.get_absolute_url}}">{{kn}}</a>
 {% endblock %}
 
