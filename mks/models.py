@@ -306,10 +306,10 @@ class Member(models.Model):
                     'MK %d is not current, but missing end or start date' %
                     self.id)
                 return None
-
+    @property
     def average_weekly_presence(self):
-        hours = WeeklyPresence.objects.filter(
-            member=self).values_list('hours', flat=True)
+        hours = list(WeeklyPresence.objects.filter(
+            member=self).values_list('hours', flat=True))
         if hours:
             return round(sum(hours) / len(hours), 1)
         else:
@@ -318,6 +318,7 @@ class Member(models.Model):
     def committee_meetings_count(self):
         return self.committee_meetings.count()
 
+    @property
     def committee_meetings_per_month(self):
         service_time = self.service_time()
         if not service_time or not self.id:
@@ -393,11 +394,11 @@ class Member(models.Model):
         self.save()
 
     def recalc_average_weekly_presence_hours(self):
-        self.average_weekly_presence_hours = self.average_weekly_presence()
+        self.average_weekly_presence_hours = self.average_weekly_presence
         self.save()
 
     def recalc_average_monthly_committee_presence(self):
-        self.average_monthly_committee_presence = self.committee_meetings_per_month()
+        self.average_monthly_committee_presence = self.committee_meetings_per_month
 
     @property
     def names(self):

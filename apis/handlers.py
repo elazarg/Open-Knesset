@@ -67,7 +67,7 @@ class MemberHandler(BaseHandler, HandlerExtensions):
 
     @staticmethod
     def votes_per_month(member):
-        return round(member.voting_statistics.average_votes_per_month(),1)
+        return round(member.voting_statistics.average_votes_per_month, 1)
 
     @staticmethod
     def service_time(member):

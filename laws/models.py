@@ -785,9 +785,11 @@ class PartyVotingStatistics(models.Model):
     def votes_count(self):
         return VoteAction.objects.filter(member__current_party=self.party).exclude(type='no-vote').count()
 
+    @property
     def votes_per_seat(self):
         return round(float(self.votes_count()) / self.party.number_of_seats,1)
-        
+
+    @property        
     def discipline(self):
         total_votes = self.votes_count()
         if total_votes > 0:
@@ -796,6 +798,7 @@ class PartyVotingStatistics(models.Model):
         else:
             return _('N/A')
 
+    @property
     def coalition_discipline(self): # if party is in opposition this actually returns opposition_discipline
         total_votes = self.votes_count()
         if total_votes > 0:
@@ -830,6 +833,7 @@ class MemberVotingStatistics(models.Model):
                 cache.set(cache_name, vc, settings.LONG_CACHE_TIME)
             return vc
 
+    @property
     def average_votes_per_month(self):
         if hasattr(self, '_average_votes_per_month'):
             return self._average_votes_per_month
