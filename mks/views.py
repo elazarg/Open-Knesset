@@ -67,7 +67,7 @@ class MemberListView(ListView):
                 def select(q):
                     y = list(q)
                     for x in y:
-                        x.extra = take(x).average_votes_per_month()
+                        x.extra = take(x).average_votes_per_month
                     y.sort(key=lambda x: x.extra, reverse=True)
                     return y
                 return select
@@ -86,7 +86,7 @@ class MemberListView(ListView):
             def select(q):
                 y = list(q)
                 for x in y:
-                    x.extra = getattr(x, attr)()
+                    x.extra = getattr(x, attr)
                 y.sort(key=lambda x: x.extra or 0, reverse=True)
                 return y
             return select, select
