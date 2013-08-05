@@ -7,7 +7,8 @@ cached = cache_page(60 * 15)
 
 mksurlpatterns = patterns('mks.views',
     url(r'^parties-members/$', cached(mkv.PartiesMembersRedirctView.as_view()), name='parties-members-index'),
-    url(r'^parties-members/(?P<pk>\d+)/$', cached(mkv.PartiesMembersView.as_view()), name='parties-members-list'),
+    url(r'^parties-members/(?P<pk>\d+)/$', cached(mkv.PartiesMembersPicturesView.as_view()), name='parties-members-list'),
+    url(r'^parties-members/(?P<pk>\d+)/raw$', mkv.PartiesMembersRawView.as_view(), name='parties-members-list-raw'),
     url(r'^member/$', cached(mkv.MemberRedirectView.as_view()), name='member-list'),
     url(r'^member/csv$', mkv.MemberCsvView.as_view()),
     url(r'^party/csv$', mkv.PartyCsvView.as_view()),

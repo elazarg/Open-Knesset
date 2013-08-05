@@ -21,13 +21,13 @@
             <h1>{{ object }}</h1>
         </div>
         <div class="span2">
-            <h5><a href="{% url 'parties-members-list-raw' knesset_number %}">{% trans "Text only" %}</a></h5>
+            <h5><a href="{% url 'parties-members-list' knesset_number %}">{% trans "With pictures" %}</a></h5>
         </div>
         <div class="span3">
             <div class="alert">
             {% trans "See also" %}:
             {% for kn in other_knessets %}
-                <a href="{{kn.get_absolute_url}}">{{kn}}</a>
+                <a href="{{kn.get_absolute_url}}raw">{{kn}}</a>
             {% endfor %}
             </div>
         </div>
@@ -43,17 +43,19 @@
 	{% for side in sides %}    
       <div class="cards span12">
         <section class="card card-list card-list-latest compact">
-            <header><h1>{% if forloop.last %}{% trans "Opposition" %}{% else %}{% trans "Coalition" %}{% endif %}</h1></header>
+        	<header><h1>{% if forloop.last %}{% trans "Opposition" %}{% else %}{% trans "Coalition" %}{% endif %}</h1></header>
             <ul>
             {% for party in side %}
-                <li>
-                    <h2><a href="{{party.get_absolute_url}}">{{party.name}}<a></h2>
-                    {% include "mks/member_photos.html" with members=party.current_members %}
-                </li>
+            		<h5><a href="{{party.get_absolute_url}}">{{party.name}}<a>:</h5>
+                    <p>
+                    {% for member in party.current_members %}
+                    	<a href="{{member.get_absolute_url}}">{{member.name}}<a>{% if forloop.last %}.{% else %},{% endif %}
+                    {% endfor %}
+                    </p>
             {% endfor %}
             </ul>
         </section>
       </div>
-    {% endfor %}        
+    {% endfor %}  
     </div>
 {% endblock %}

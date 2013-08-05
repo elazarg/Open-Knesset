@@ -497,12 +497,9 @@ def get_mk_entry(**kwargs):
     return Member.objects.get(pk=i) if i else None
 
 def mk_is_backlinkable(url, entry):
-    if entry:
-        return entry.backlinks_enabled
-    return False
+    return entry and entry.backlinks_enabled
 
 mk_detail = default_server.register_view(MemberDetailView.as_view(), get_mk_entry, mk_is_backlinkable)
-
 
 class MemeberMoreActionsView(GetMoreView):
     """Get partially rendered member actions content for AJAX calls to 'More'"""
@@ -555,21 +552,25 @@ class PartiesMembersRedirctView(RedirectView):
 class PartiesMembersView(DetailView):
     """Index page for parties and members."""
 
-    template_name = 'mks/parties_members.html'
     model = Knesset
-
     def get_context_data(self, **kwargs):
         ctx = super(PartiesMembersView, self).get_context_data(**kwargs)
 
         ctx['other_knessets'] = self.model.objects.exclude(
             number=self.object.number).order_by('-number')
-        ctx['coalition'] = Party.objects.filter(
-            is_coalition=True, knesset=self.object).annotate(
-                extra=Sum('number_of_seats')).order_by('-extra')
-        ctx['opposition'] = Party.objects.filter(
-            is_coalition=False, knesset=self.object).annotate(
-                extra=Sum('number_of_seats')).order_by('-extra')
+        parties = list(Party.objects.filter(knesset=self.object).annotate(
+                                        extra=Sum('number_of_seats')).order_by('-extra'))
+        ctx['sides'] = ([x for x in parties if x.is_coalition], [x for x in parties if not x.is_coalition])
         ctx['past_members'] = Member.objects.filter(
             is_current=False, current_party__knesset=self.object)
-
+        ctx['knesset_number'] =  self.object.number
         return ctx
+
+class PartiesMembersPicturesView(PartiesMembersView):
+    """Index page for parties and members."""
+    template_name = 'mks/parties_members.html'
+    
+class PartiesMembersRawView(PartiesMembersView):
+    """Index page for parties and members."""
+    template_name = 'mks/parties_members_raw.html'
+    
