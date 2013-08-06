@@ -139,9 +139,7 @@ def legitimate_header(line):
     """Retunrs true if 'line' looks like something should should be a protocol part header"""
     if re.match(r'^\<.*\>\W*$',line): # this is a <...> line.
         return True
-    if not(line.endswith(':')) or len(line)>50 or not_header.search(line):
-        return False
-    return True
+    return line.endswith(':') and len(line)<=50 and not not_header.search(line)
 
 class CommitteeMeeting(models.Model):
     committee = models.ForeignKey(Committee, related_name='meetings')
@@ -236,18 +234,17 @@ class CommitteeMeeting(models.Model):
         i = 1
         section = []
         header = ''
-
         # now create the sections
         for line in protocol_text:
             if legitimate_header(line):
-                if (i>1)or(section):
+                if i > 1 or section:
                     ProtocolPart(meeting=self, order=i,
                         header=header, body='\n'.join(section)).save()
                 i += 1
-                header = re.sub('[\>:]+$','',re.sub('^[\< ]+','',line))
+                header = re.sub(r'(^[\< ]+)|([\>:]+$)','',line)
                 section = []
             else:
-                section.append (line)
+                section.append(line)
 
         # don't forget the last section
         ProtocolPart(meeting=self, order=i,
