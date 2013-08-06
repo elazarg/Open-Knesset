@@ -2,18 +2,11 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
-from django.dispatch import receiver
-from django.db.models.signals import post_save
+# from django.dispatch import receiver
+# from django.db.models.signals import post_save
 
-from mks.models import Member
 from .managers import PersonManager
 
-
-class Title(models.Model):
-    name = models.CharField(max_length=64)
-
-    def __unicode__(self):
-        return self.name
 
 class PersonAlias(models.Model):
     name = models.CharField(max_length=64)
@@ -27,10 +20,15 @@ GENDER_CHOICES = (
     (u'F', _('Female')),
 )
 
-class Person(models.Model):
+class Title(models.Model):
     name = models.CharField(max_length=64)
-    mk = models.ForeignKey('mks.Member', blank=True, null=True, related_name='person')
-    titles = models.ManyToManyField(Title, blank=True, null=True, related_name='persons')
+
+    def __unicode__(self):
+        return self.name
+
+class AbstractPerson(models.Model):
+    name = models.CharField(max_length=64)
+
     # TODO: change to an ImageField
     img_url = models.URLField(blank=True)
     phone = models.CharField(blank=True, null=True, max_length=20)
@@ -50,6 +48,14 @@ class Person(models.Model):
     residence_economy = models.IntegerField(blank=True, null=True)
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True)
 
+    class Meta:
+        abstract = True
+        
+# from mks.models import Member
+
+class Person(AbstractPerson):
+    mk = models.ForeignKey('mks.Member', blank=True, null=True, related_name='person')
+    titles = models.ManyToManyField(Title, blank=True, null=True, related_name='persons')
     objects = PersonManager()
 
     def __unicode__(self):
@@ -92,17 +98,6 @@ class Person(models.Model):
             part.save()
         other.delete()
         self.save()
-
-
-@receiver(post_save, sender=Member)
-def member_post_save(sender, **kwargs):
-    instance = kwargs['instance']
-    person = Person.objects.get_or_create(mk=instance)[0]
-    for field in instance._meta.fields:
-        if field.name != 'id' and hasattr(person, field.name):
-            setattr(person, field.name, getattr(instance, field.name))
-
-    person.save()
 
 
 class Role(models.Model):

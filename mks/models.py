@@ -159,41 +159,22 @@ class MemberAltname(models.Model):
     name = models.CharField(max_length=64)
 
 
-class Member(models.Model):
-    name = models.CharField(max_length=64)
-    parties = models.ManyToManyField(
-        Party, related_name='all_members', through='Membership')
-    current_party = models.ForeignKey(
-        Party, related_name='members', blank=True, null=True)
+from persons.models  import AbstractPerson, Person
+ 
+class Member(AbstractPerson):
+    parties = models.ManyToManyField(Party, related_name='all_members', through='Membership')
+    is_current = models.BooleanField(default=True, db_index=True)
+    
+    current_party = models.ForeignKey( Party, related_name='members', blank=True, null=True)
     current_position = models.PositiveIntegerField(blank=True, default=999)
+    current_role_descriptions = models.CharField(blank=True, null=True, max_length=1024)
+    
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
-    img_url = models.URLField(blank=True)
-    phone = models.CharField(blank=True, null=True, max_length=20)
-    fax = models.CharField(blank=True, null=True, max_length=20)
-    email = models.EmailField(blank=True, null=True)
+    
     website = models.URLField(blank=True, null=True)
-    family_status = models.CharField(blank=True, null=True, max_length=10)
-    number_of_children = models.IntegerField(blank=True, null=True)
-    date_of_birth = models.DateField(blank=True, null=True)
-    place_of_birth = models.CharField(blank=True, null=True, max_length=100)
-    date_of_death = models.DateField(blank=True, null=True)
-    year_of_aliyah = models.IntegerField(blank=True, null=True)
-    is_current = models.BooleanField(default=True, db_index=True)
     blog = models.OneToOneField(Blog, blank=True, null=True)
-    place_of_residence = models.CharField(blank=True, null=True, max_length=100, help_text=_('an accurate place of residence (for example, an address'))
-    area_of_residence = models.CharField(blank=True, null=True, max_length=100, help_text=_('a general area of residence (for example, "the negev"'))
-    place_of_residence_lat = models.CharField(
-        blank=True, null=True, max_length=16)
-    place_of_residence_lon = models.CharField(
-        blank=True, null=True, max_length=16)
-    residence_centrality = models.IntegerField(blank=True, null=True)
-    residence_economy = models.IntegerField(blank=True, null=True)
     user = models.ForeignKey(User, blank=True, null=True)
-    gender = models.CharField(
-        max_length=1, choices=GENDER_CHOICES, blank=True, null=True)
-    current_role_descriptions = models.CharField(
-        blank=True, null=True, max_length=1024)
 
     bills_stats_proposed = models.IntegerField(default=0)
     bills_stats_pre = models.IntegerField(default=0)
@@ -437,6 +418,19 @@ class Member(models.Model):
     def age(self):
         return relativedelta(date.today(), self.date_of_birth)
 
+#FIX: cut-pasted from persons. This is probably a result of a design error
+#besides, nobody assures `save` will actually be called
+from django.dispatch import receiver
+from django.db.models.signals import post_save
+@receiver(post_save, sender=Member)
+def member_post_save(sender, **kwargs):
+    instance = kwargs['instance']
+    person = Person.objects.get_or_create(mk=instance)[0]
+    for field in instance._meta.fields:
+        if field.name != 'id' and hasattr(person, field.name):
+            setattr(person, field.name, getattr(instance, field.name))
+ 
+    person.save()
 
 class WeeklyPresence(models.Model):
     member = models.ForeignKey('Member')
