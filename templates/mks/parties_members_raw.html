@@ -9,10 +9,10 @@
 {% endblock %}
 
 {% block actual_content %}
-	<h5><a href="{{party.get_absolute_url}}">{{party.name}}<a>:</h5>
-    <p>
+	<h5><a href="{{party.get_absolute_url}}">{{party.name}}</a>   ({{party.current_members.count}}{#{% trans "MKs" %}#})</h5>
+	<p>
     {% for member in party.current_members %}
-    	<a href="{{member.get_absolute_url}}">{{member.name}}<a>{% if forloop.last %}.{% else %},{% endif %}
+    	<a href="{{member.get_absolute_url}}">{{member.name}}</a>{% if forloop.last %}.{% else %}, {% endif %}
     {% endfor %}
     </p>
 {% endblock %}

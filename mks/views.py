@@ -197,7 +197,7 @@ class MemberDetailView(DetailView):
             watched = False
             cached_context = cache.get('mk_{}'.format(member.id))
 
-        if cached_context is None:
+        if not cached_context:
             presence = {}
             self.calc_percentile(member, presence,
                                  'average_weekly_presence_hours',
@@ -212,11 +212,10 @@ class MemberDetailView(DetailView):
             for s in ('proposed', 'pre', 'first', 'approved'):
                 self.calc_bill_stats(member,bills_statistics, s)
             
-            all_agendas = Agenda.objects.get_selected_for_instance(member,
+            agendas = Agenda.objects.get_selected_for_instance(member,
                                         user=user if authenticated else None, top=3, bottom=3)
-            agendas = all_agendas['top'] + all_agendas['bottom']
             for agenda in agendas:
-                agenda.watched=False
+                agenda.watched = False
                 agenda.totals = agenda.get_mks_totals(member)
             if authenticated:
                 for watched_agenda in profile.agendas:
@@ -444,7 +443,6 @@ class PartyDetailView(DetailView):
         authenticated_user = user if user.is_authenticated() else None
         
         agendas = Agenda.objects.get_selected_for_instance(party, user=authenticated_user, top=10, bottom=10)
-        agendas = agendas['top'] + agendas['bottom']
         for agenda in agendas:
             agenda.watched=False
         if authenticated_user:

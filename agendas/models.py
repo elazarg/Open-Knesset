@@ -218,13 +218,13 @@ class AgendaManager(models.Manager):
         # Returns interesting agendas for model instances such as: member, party
         agendas = list(self.get_relevant_for_user(user))
         for agenda in agendas:
-            agenda.score = agenda.__getattribute__('{}_score'.format(instance.__class__.__name__.lower()))(instance)
+            agenda.score = getattr(agenda, '{}_score'.format(type(instance).__name__.lower()))(instance)
             agenda.significance = agenda.score * agenda.num_followers
         agendas.sort(key=attrgetter('significance'))
         agendas = get_top_bottom(agendas, top, bottom)
         agendas['top'].sort(key=attrgetter('score'), reverse=True)
         agendas['bottom'].sort(key=attrgetter('score'), reverse=True)
-        return agendas
+        return agendas['top'] + agendas['bottom']
 
     def get_relevant_for_mk(self, mk, agendaId):
         return AgendaVote.objects.filter(agenda__id=agendaId, vote__votes__id=mk).distinct()
@@ -273,8 +273,8 @@ class AgendaManager(models.Manager):
                     res.append( (mkid,(score, volume, numvotes)) )
                 res.sort(key=lambda x:x[1][0], reverse=True)
                 
-                scores = enumerate( chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
-                mks_values[agendaId] = [(mkid, dict(rank=rank, score=score, volume=volume, numvotes=numvotes))
+                scores = enumerate(res, 1) # chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
+                mks_values[agendaId] = [(mkid, {'rank':rank, 'score':score, 'volume':volume, 'numvotes':numvotes})
                                          for rank, (mkid, (score, volume, numvotes)) in  scores]
             cache.set('agendas_mks_values', mks_values, 1800)
         return mks_values

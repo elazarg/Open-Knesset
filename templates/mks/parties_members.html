@@ -10,7 +10,7 @@
 
 {% block actual_content %}
     <li>
-        <h2><a href="{{party.get_absolute_url}}">{{party.name}}<a></h2>
+        <h2><a href="{{party.get_absolute_url}}">{{party.name}}</a>  ({{party.current_members.count}}{#{% trans "MKs" %}#})</h2>
         {% include "mks/member_photos.html" with members=party.current_members %}
     </li>
 {% endblock %}

@@ -169,7 +169,7 @@ class AgendaDetailView(DetailView):
         # Optimization: get all parties and members before rendering
         # Further possible optimization: only bring parties/members needed for rendering
         for name, cls in [('parties', Party), ('members', Member)]:
-            context[name] = { party.id:party for party in cls.objects.all() }
+            context[name] = { x.id:x for x in cls.objects.all() }
         return context
 
 
