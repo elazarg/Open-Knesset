@@ -47,6 +47,8 @@ class PartyAdmin(admin.ModelAdmin):
     inlines = (MembershipInline,)
 admin.site.register(Party, PartyAdmin)
 
+def correlation_list_to_string(m, cl):
+    return ", ".join(["%s (%.0f)" % ((c.m2 if c.m1 == m else c.m1).get_name_with_link(), 100 * c.normalized_score) for c in cl])
 
 class MemberAdmin(admin.ModelAdmin):
     ordering = ('name',)
@@ -63,10 +65,12 @@ class MemberAdmin(admin.ModelAdmin):
 
     def change_view(self, request, object_id, extra_context=None):
         m = Member.objects.get(id=object_id)
+        corrs = Correlation.objects.filter(m1=m.id).order_by('normalized_score')
+        
         my_context = {
             'extra': {
-                'hi_corr': m.CorrelationListToString(m.HighestCorrelations()),
-                'low_corr': m.CorrelationListToString(m.LowestCorrelations()),
+                'hi_corr': correlation_list_to_string(m, corrs[:4]),
+                'low_corr': correlation_list_to_string(m, corrs[-3:]),
             }
         }
         return super(MemberAdmin, self).change_view(request, object_id,

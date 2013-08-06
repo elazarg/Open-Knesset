@@ -2,8 +2,8 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.utils.translation import ugettext_lazy as _
 from django.core.exceptions import ValidationError
-# from django.dispatch import receiver
-# from django.db.models.signals import post_save
+from django.contrib.auth.models import User
+from planet.models import Blog
 
 from .managers import PersonManager
 
@@ -31,11 +31,19 @@ class AbstractPerson(models.Model):
 
     # TODO: change to an ImageField
     img_url = models.URLField(blank=True)
+    
+    #contact detail
     phone = models.CharField(blank=True, null=True, max_length=20)
     fax = models.CharField(blank=True, null=True, max_length=20)
     email = models.EmailField(blank=True, null=True)
+    website = models.URLField(blank=True, null=True)
+    blog = models.OneToOneField(Blog, blank=True, null=True)
+    
+    user = models.ForeignKey(User, blank=True, null=True)
+        
     family_status = models.CharField(blank=True, null=True,max_length=10)
     number_of_children = models.IntegerField(blank=True, null=True)
+    
     date_of_birth  = models.DateField(blank=True, null=True)
     place_of_birth = models.CharField(blank=True, null=True, max_length=100)
     date_of_death  = models.DateField(blank=True, null=True)
@@ -44,12 +52,16 @@ class AbstractPerson(models.Model):
     area_of_residence = models.CharField(blank=True, null=True, max_length=100, help_text = _('a general area of residence (for example, "the negev"'))
     place_of_residence_lat = models.CharField(blank=True, null=True, max_length=16)
     place_of_residence_lon = models.CharField(blank=True, null=True, max_length=16)
+    
+    #TODO: should move to a placeStatistics model
     residence_centrality = models.IntegerField(blank=True, null=True)
     residence_economy = models.IntegerField(blank=True, null=True)
+    
     gender = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True, null=True)
 
     class Meta:
         abstract = True
+        ordering = ['name']
         
 # from mks.models import Member
 
@@ -62,7 +74,6 @@ class Person(AbstractPerson):
         return self.name
 
     class Meta:
-        ordering = ('name',)
         verbose_name = _('Person')
         verbose_name_plural = _('Persons')
 

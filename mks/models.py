@@ -4,20 +4,12 @@ from dateutil.relativedelta import relativedelta
 from django.db import models
 from django.core.urlresolvers import reverse
 from django.utils.translation import ugettext_lazy as _, ugettext
-from django.contrib.auth.models import User
-from planet.models import Blog
 from mks.managers import (
     BetterManager, KnessetManager, CurrentKnessetMembersManager,
     CurrentKnessetPartyManager)
 
 import logging
 logger = logging.getLogger("open-knesset.mks.models")
-
-GENDER_CHOICES = (
-    (u'M', _('Male')),
-    (u'F', _('Female')),
-)
-
 
 class Correlation(models.Model):
     m1 = models.ForeignKey('Member', related_name='m1')
@@ -113,13 +105,13 @@ class Party(models.Model):
     def Url(self):
         return "/admin/simple/party/{}".format(self.id)
 
-    def NameWithLink(self):
+    def get_name_with_link(self):
         return u'<a href="{}">{}</a>'.format(self.get_absolute_url(), self.name)
-    NameWithLink.allow_tags = True
+    get_name_with_link.allow_tags = True
 
-    def MembersString(self):
-        return ", ".join([m.NameWithLink() for m in self.members.all().order_by('name')])
-    MembersString.allow_tags = True
+#     def MembersString(self):
+#         return ", ".join([m.get_name_with_link() for m in self.members.all().order_by('name')])
+#     MembersString.allow_tags = True
 
     def member_list(self):
         return self.members.all()
@@ -158,7 +150,6 @@ class MemberAltname(models.Model):
     member = models.ForeignKey('Member')
     name = models.CharField(max_length=64)
 
-
 from persons.models  import AbstractPerson, Person
  
 class Member(AbstractPerson):
@@ -172,10 +163,6 @@ class Member(AbstractPerson):
     start_date = models.DateField(blank=True, null=True)
     end_date = models.DateField(blank=True, null=True)
     
-    website = models.URLField(blank=True, null=True)
-    blog = models.OneToOneField(Blog, blank=True, null=True)
-    user = models.ForeignKey(User, blank=True, null=True)
-
     bills_stats_proposed = models.IntegerField(default=0)
     bills_stats_pre = models.IntegerField(default=0)
     bills_stats_first = models.IntegerField(default=0)
@@ -190,7 +177,6 @@ class Member(AbstractPerson):
     current_knesset = CurrentKnessetMembersManager()
 
     class Meta:
-        ordering = ['name']
         verbose_name = _('Member')
         verbose_name_plural = _('Members')
 
@@ -217,9 +203,9 @@ class Member(AbstractPerson):
     def Party(self):
         return self.parties.all().order_by('-membership__start_date')[0]
 
-    def PartiesString(self):
-        return ", ".join([p.NameWithLink() for p in self.parties.all().order_by('membership__start_date')])
-    PartiesString.allow_tags = True
+#     def PartiesString(self):
+#         return ", ".join([p.get_name_with_link() for p in self.parties.all().order_by('membership__start_date')])
+#     PartiesString.allow_tags = True
 
     def party_at(self, date):
         """Returns the party this memeber was at given date
@@ -231,47 +217,17 @@ class Member(AbstractPerson):
                 return membership.party
         return None
 
-    def TotalVotesCount(self):
-        return self.votes.exclude(voteaction__type='no-vote').count()
-
     def for_votes(self):
         return self.votes.filter(voteaction__type='for')
-
-    def ForVotesCount(self):
-        return self.for_votes().count()
 
     def against_votes(self):
         return self.votes.filter(voteaction__type='against')
 
-    def AgainstVotesCount(self):
-        return self.against_votes().count()
-
     def abstain_votes(self):
         return self.votes.filter(voteaction__type='abstain')
 
-    def AbstainVotesCount(self):
-        return self.abstain_votes().count()
-
     def no_votes(self):
         return self.votes.filter(voteaction__type='no-vote')
-
-    def NoVotesCount(self):
-        return self.no_votes().count()
-
-    def LowestCorrelations(self):
-        return Correlation.objects.filter(m1=self.id).order_by('normalized_score')[0:4]
-
-    def HighestCorrelations(self):
-        return Correlation.objects.filter(m1=self.id).order_by('-normalized_score')[0:4]
-
-    def CorrelationListToString(self, cl):
-
-        strings = []
-        for c in cl:
-            m = c.m2 if c.m1 == self else c.m1
-            strings.append(
-                "%s (%.0f)" % (m.NameWithLink(), 100 * c.normalized_score))
-        return ", ".join(strings)
 
     def service_time(self):
         """returns the number of days this MK has been serving in the current knesset"""
@@ -310,9 +266,9 @@ class Member(AbstractPerson):
     def get_absolute_url(self):
         return ('member-detail-with-slug', [str(self.id), self.name_with_dashes()])
 
-    def NameWithLink(self):
+    def get_name_with_link(self):
         return '<a href="%s">%s</a>' % (self.get_absolute_url(), self.name)
-    NameWithLink.allow_tags = True
+    get_name_with_link.allow_tags = True
 
     @property
     def get_role(self):

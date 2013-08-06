@@ -273,7 +273,7 @@ class AgendaManager(models.Manager):
                     res.append( (mkid,(score, volume, numvotes)) )
                 res.sort(key=lambda x:x[1][0], reverse=True)
                 
-                scores = enumerate(res, 1) # chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
+                scores = enumerate(chain(res, ((mkid, (0,0,0)) for mkid in all_mks-agenda_mks)), 1)
                 mks_values[agendaId] = [(mkid, {'rank':rank, 'score':score, 'volume':volume, 'numvotes':numvotes})
                                          for rank, (mkid, (score, volume, numvotes)) in  scores]
             cache.set('agendas_mks_values', mks_values, 1800)

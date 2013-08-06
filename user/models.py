@@ -7,7 +7,8 @@ from django.contrib.contenttypes.models import ContentType
 
 from actstream.models import Follow
 
-from mks.models import Party, Member, GENDER_CHOICES
+from mks.models import Party, Member
+from persons.models import GENDER_CHOICES
 from laws.models import Bill
 from agendas.models import Agenda
 from committees.models import CommitteeMeeting,Topic
