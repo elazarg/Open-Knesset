@@ -259,7 +259,10 @@ class MemberBacklinksViewsTest(TestCase):
         self.vote_action = VoteAction.objects.create(member=self.mk_1, vote=self.vote, type='for')
 
         self.client = Client(SERVER_NAME='example.com')
+        
+        #using this produces warning
         self.xmlrpc_client = TestClientServerProxy('/pingback/')
+        
         self.PINGABLE_MEMBER_ID = str(self.mk_1.id)
         self.NON_PINGABLE_MEMBER_ID = str(self.mk_2.id)
 
@@ -290,11 +293,12 @@ class MemberBacklinksViewsTest(TestCase):
 
     '''
     def testPingNonLinkingSourceURI(self):
+        #emits warning
         self.assertRaises(Fault,
                           self.xmlrpc_client.pingback.ping,
                           'http://example.com/bad-source-document/',
                           'http://example.com/member/'+PINGABLE_MEMBER_ID+'/')
-
+   
         try:
             self.xmlrpc_client.pingback.ping('http://example.com/bad-source-document/',
                                              'http://example.com/member/'+PINGABLE_MEMBER_ID+'/')
@@ -302,17 +306,20 @@ class MemberBacklinksViewsTest(TestCase):
             self.assertEquals(f.faultCode,
                               17,
                              'Server did not return "source URI does not link" response')
+            
     def testDisallowedMethod(self):
         response = self.client.get('/pingback/')
         self.assertEquals(response.status_code,
                           405,
                           'Server returned incorrect status code for disallowed HTTP method')
-
+   
     def testNonExistentRPCMethod(self):
+        #emits warning
         self.assertRaises(Fault, self.xmlrpc_client.foo)
-
-
+    
+   
     def testBadPostData(self):
+        #emits warning
         post_data = urlencode({'sourceURI': 'http://example.com/good-source-document/',
                                'targetURI': 'http://example.com/member/'+PINGABLE_MEMBER_ID+'/'})
         response = self.client.post('/pingback/', post_data, TRACKBACK_CONTENT_TYPE)
@@ -321,6 +328,7 @@ class MemberBacklinksViewsTest(TestCase):
                           response.content)
 
     def testPingNonExistentTargetURI(self):
+        #emits warning
         self.assertRaises(Fault,
                           self.xmlrpc_client.pingback.ping,
                           'http://example.com/member/non-existent-resource/',
@@ -332,8 +340,8 @@ class MemberBacklinksViewsTest(TestCase):
             self.assertEquals(f.faultCode,
                               32,
                               'Server did not return "target does not exist" error')
-
-
+ 
+ 
     def testPingAlreadyRegistered(self):
         self.xmlrpc_client.pingback.ping('http://example.com/another-good-source-document/',
                                              'http://example.com/member/'+PINGABLE_MEMBER_ID+'/')
@@ -341,7 +349,7 @@ class MemberBacklinksViewsTest(TestCase):
                           self.xmlrpc_client.pingback.ping,
                           'http://example.com/another-good-source-document/',
                           'http://example.com/member/'+PINGABLE_MEMBER_ID+'/')
-
+ 
         try:
             self.xmlrpc_client.pingback.ping('http://example.com/another-good-source-document/',
                                              'http://example.com/member/'+PINGABLE_MEMBER_ID+'/')
@@ -349,7 +357,7 @@ class MemberBacklinksViewsTest(TestCase):
             self.assertEqual(f.faultCode,
                              48,
                              'Server did not return "ping already registered" error')
-
+ 
     def testPingbackLinkTemplateTag(self):
         t = template.Template("{% load pingback_tags %}{% pingback_link pingback_path %}")
         c = template.Context({'pingback_path': '/pingback/'})
@@ -359,7 +367,7 @@ class MemberBacklinksViewsTest(TestCase):
         self.assertTrue(bool(match), 'Pingback link tag did not render')
         self.assertEquals(match.groups(0)[0], 'http://example.com/pingback/',
                           'Pingback link tag rendered incorrectly')
-
+ 
     def testPingNonPingableTargetURI(self):
         self.assertRaises(Fault,
                           self.xmlrpc_client.pingback.ping,
@@ -372,15 +380,15 @@ class MemberBacklinksViewsTest(TestCase):
             self.assertEquals(f.faultCode,
                               33,
                               'Server did not return "target not pingable" error')
-
+ 
     def testPingSourceURILinks(self):
         r = self.xmlrpc_client.pingback.ping('http://example.com/good-source-document/',
                                              'http://example.com/member/'+self.PINGABLE_MEMBER_ID+'/')
-
+ 
         self.assertEquals(r,
                           "Ping from http://example.com/good-source-document/ to http://example.com/member/1/ registered",
                           "Failed registering ping")
-
+ 
         registered_ping = InboundBacklink.objects.get(source_url='http://example.com/good-source-document/',
                                                       target_url='http://example.com/member/'+self.PINGABLE_MEMBER_ID+'/')
         self.assertEquals(str(registered_ping.target_object.id),
