@@ -203,9 +203,10 @@ class Member(AbstractPerson):
     def Party(self):
         return self.parties.all().order_by('-membership__start_date')[0]
 
-#     def PartiesString(self):
-#         return ", ".join([p.get_name_with_link() for p in self.parties.all().order_by('membership__start_date')])
-#     PartiesString.allow_tags = True
+    def parties_string(self):
+        'used in admin.py'
+        return ", ".join([p.get_name_with_link() for p in self.parties.all().order_by('membership__start_date')])
+    parties_string.allow_tags = True
 
     def party_at(self, date):
         """Returns the party this memeber was at given date

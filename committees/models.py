@@ -400,3 +400,4 @@ class Topic(models.Model):
                user in self.editors.all()
 
 import listeners
+del listeners

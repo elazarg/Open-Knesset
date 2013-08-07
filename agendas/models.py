@@ -441,20 +441,18 @@ class Agenda(models.Model):
 
             # query summary
             filterList = self.generate_summary_filters(ranges)
-            baseQuerySet = SummaryAgenda.objects.filter(filterList, agenda=self)
-            summaries = list(baseQuerySet)
+            summaries = list(SummaryAgenda.objects.filter(filterList, agenda=self))
 
+            import pdb; pdb.set_trace()
             # group summaries for respective ranges
             summaries_for_ranges = []
             for gte, lt in ranges:
                 summaries_for_range = defaultdict(list)
                 for s in summaries:
-                    if (gte, lt) == (None, None) or \
-                        ( (not gte) or s.month >= gte) and \
-                        ( (not lt) or s.month < lt ):
+                    if (not gte or s.month >= gte) and (not lt or s.month < lt ):
                         summaries_for_range[s.summary_type].append(s)
                 summaries_for_ranges.append(summaries_for_range)
-
+                
 
             # get list of mk ids
             mk_ids = Member.objects.all().values_list('id', flat=True)
@@ -468,15 +466,12 @@ class Agenda(models.Model):
                 
                 # calculate results per mk
                 range_mk_results = []
-                for mk_id in mk_results.keys():
+                for mk_id in mk_ids:
                     mk_data = current_mks_data[mk_id]
-                    if mk_data:
-                        mk_votes = sum(x.votes for x in mk_data)
-                        mk_volume = 100*mk_votes / total_votes
-                        mk_score = 100*sum(x.score for x in mk_data) / total_score
-                        range_mk_results.append((mk_id, mk_votes, mk_score, mk_volume))
-                    else:
-                        range_mk_results.append( (mk_id, None, None, None) )
+                    mk_votes = sum(x.votes for x in mk_data)
+                    mk_volume = total_votes and 100*mk_votes / total_votes
+                    mk_score = total_score and 100*sum(x.score for x in mk_data) / total_score
+                    range_mk_results.append( (mk_id, mk_votes, mk_score, mk_volume) )
 
                 # sort results by score descending
                 range_mk_results.sort(key=itemgetter(2, 0), reverse=True)
@@ -489,7 +484,7 @@ class Agenda(models.Model):
             if fullRange:
                 cache.set('agenda_{}_mks_values'.format(self.id), mks_values, 1800)
         if fullRange:
-            mk_results = sorted(mk_results.items(), key=lambda (k, v):v['rank'], reverse=True)
+            mk_results = sorted(mk_results.items(), key=lambda (k, v):v['rank'])
         return mk_results
 
 

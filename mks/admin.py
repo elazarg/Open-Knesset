@@ -53,7 +53,7 @@ def correlation_list_to_string(m, cl):
 class MemberAdmin(admin.ModelAdmin):
     ordering = ('name',)
 #    fields = ('name','start_date','end_date')
-    list_display = ('name', 'gender', 'PartiesString', 'current_party',
+    list_display = ('name', 'gender', 'parties_string', 'current_party',
                     'is_current', 'current_position')
     list_editable = ('is_current', 'current_position')
     search_fields = ['name']
