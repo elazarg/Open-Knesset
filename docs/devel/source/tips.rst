@@ -133,7 +133,7 @@ During debugging, you can use the Python debugger, pdb_.
 
 Add ``import pbd`` in the code, and ``pdb.set_trace()`` in the line you want to begin debugging from.
 
-Then run the server using
+Run the server:
 
 .. code-block:: bash
 
@@ -142,9 +142,14 @@ Then run the server using
 	 -> import os
 	 (Pdb) 
 	 
-This is the pdb shell.
+This is the pdb shell; Hit ``c`` to continue. Yow you can browse the site as usual, and when the code hit the line you set a trace in, the browser will hang, and you will get the pdb shell back:
 
-Hit ``c`` to continue. Yow you can browse the site as usual, and when the code hit the line you set a trace in, the browser will hang, and you will get the pdb shell back.
+.. code-block:: bash
+
+	> /home/yourname/workspace/oknesset/Open-Knesset/agendas/models.py(448)get_mks_values()
+	-> summaries_for_ranges = []
+	
+	(Pdb) 
 
 You can run any python code from there, just like a normal python interpreter, in addition to `control commands`_.
 
@@ -154,3 +159,36 @@ You can run any python code from there, just like a normal python interpreter, i
 
 .. _pdb: http://docs.python.org/2/library/pdb.html
 .. _`control commands`: http://docs.python.org/2/library/pdb.html#debugger-commands
+
+Quicker testing
+===================================
+
+PASSWORD_HASHERS
+~~~~~~~~~~~~~~~~~~
+You may want to add this too to `local_settings.py`, in order to speed up the testing by 25%-30%:
+
+.. code-block:: python
+
+	import sys
+	if 'test' in sys.argv:
+	    PASSWORD_HASHERS = (
+	        'django.contrib.auth.hashers.MD5PasswordHasher',
+	    ) 
+
+``--failfast``
+~~~~~~~~~~~~~~~~~~
+if you want the test suite to fail as soon as the first test does, add ``--failfast`` flag:
+
+.. code-block:: sh
+
+    python manage.py test --failfast
+
+alert
+~~~~~~~~~~~~~~~~~~
+In Ubuntu, you can add an ``alert`` after this command:
+
+.. code-block:: sh
+
+    python manage.py test --failfast; alert
+    
+This will pop up a notification when the test is finished.
