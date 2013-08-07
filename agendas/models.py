@@ -443,7 +443,7 @@ class Agenda(models.Model):
             filterList = self.generate_summary_filters(ranges)
             summaries = list(SummaryAgenda.objects.filter(filterList, agenda=self))
 
-            import pdb; pdb.set_trace()
+#             import pdb; pdb.set_trace()
             # group summaries for respective ranges
             summaries_for_ranges = []
             for gte, lt in ranges:

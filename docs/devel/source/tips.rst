@@ -133,16 +133,7 @@ During debugging, you can use the Python debugger, pdb_.
 
 Add ``import pbd`` in the code, and ``pdb.set_trace()`` in the line you want to begin debugging from.
 
-Run the server:
-
-.. code-block:: bash
-
-	 $ python -m pdb manage.py runserver
-	 ...
-	 -> import os
-	 (Pdb) 
-	 
-This is the pdb shell; Hit ``c`` to continue. Yow you can browse the site as usual, and when the code hit the line you set a trace in, the browser will hang, and you will get the pdb shell back:
+Run the server and browse the site as usual. When the code hit the line you set a trace in, the browser will hang, and you will get the pdb shell back:
 
 .. code-block:: bash
 
@@ -151,9 +142,15 @@ This is the pdb shell; Hit ``c`` to continue. Yow you can browse the site as usu
 	
 	(Pdb) 
 
-You can run any python code from there, just like a normal python interpreter, in addition to `control commands`_.
+You can run any python code from there, just like a normal python interpreter, in addition to `control commands`_, 
+like ``c`` to continue execution, and ``n`` to step single line.
 
 .. warning::
+
+	The debugger will not work in ``python manage.py``, since the output is blocked. The tests will just hang.
+
+
+.. important::
 
 	Remember to remove any ``set_trace()`` commands from the code before committing.
 
