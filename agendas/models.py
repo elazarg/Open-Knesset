@@ -123,7 +123,26 @@ class AgendaVote(Important):
         objMonth = dateMonthTruncate(self.vote.time)
 
         summaryObjects = SummaryAgenda.objects.filter(agenda=self.agenda,  month=objMonth).all()
+#        <<<<<<< HEAD
         agendasByMk = [s.mk_id for s in summaryObjects if s.summary_type != 'AG']
+#         =======
+#         agendaSummary   = None
+#         if not filter(lambda summary:summary.summary_type=='AG',summaryObjects):
+#             agendaSummary   = SummaryAgenda(month=objMonth,
+#                                             agenda=self.agenda,
+#                                             summary_type='AG',
+#                                             score=abs(agendaScore),
+#                                             votes=1)
+#         else:
+#             existingAgenda = filter(lambda summary:summary.summary_type=='AG',summaryObjects)[0]
+#             existingAgenda.votes += 1
+#             existingAgenda.score += abs(agendaScore)
+#             existingAgenda.save()
+# 
+#         agendasByMk     = dict(map(lambda summary:(summary.mk_id,summary),
+#                                    filter(lambda summary:summary.summary_type=='MK',
+#                                           summaryObjects)))
+# >>>>>>> 4b160480cb5b568e1be245905f8a384732e39d61
         newObjects = []
         if len(agendasByMk) == len(summaryObjects):
             newObjects.append(SummaryAgenda(agenda=self.agenda, month=objMonth,  votes=1,
@@ -443,7 +462,7 @@ class Agenda(models.Model):
             filterList = self.generate_summary_filters(ranges)
             summaries = list(SummaryAgenda.objects.filter(filterList, agenda=self))
 
-#             import pdb; pdb.set_trace()
+            # import pdb; pdb.set_trace()
             # group summaries for respective ranges
             summaries_for_ranges = []
             for gte, lt in ranges:
